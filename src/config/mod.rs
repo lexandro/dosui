@@ -6,7 +6,7 @@
 pub mod dosbox_conf;
 pub mod paths;
 pub mod profile;
+pub mod settings;
 
 // Filled in during M1+:
-// pub mod settings;
 // pub mod defaults;
