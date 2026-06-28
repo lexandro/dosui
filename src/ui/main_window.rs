@@ -68,30 +68,33 @@ pub fn build(app: &Application) {
         });
     }
 
-    // Play -> launch the selected profile.
+    // Play button -> launch the selected profile.
     {
         let profiles = profiles.clone();
         let settings = settings.clone();
         let window = window.downgrade(); // weak: avoid window<->closure cycle
         let list = list.clone();
         detail.play.connect_clicked(move |_| {
-            let Some(row) = list.selected_row() else {
-                return;
-            };
-            let Some((dir, profile)) = profiles.get(row.index() as usize) else {
-                return;
-            };
-            if let Err(e) = launcher::launch(dir, profile, &settings) {
-                log::error!("launch failed: {e:#}");
-                if let Some(window) = window.upgrade() {
-                    AlertDialog::builder()
-                        .message(format!("Could not launch {}", profile.title))
-                        .detail(format!("{e:#}"))
-                        .build()
-                        .show(Some(&window));
-                }
+            if let Some(row) = list.selected_row() {
+                launch_entry(&profiles, &settings, window.upgrade(), row.index() as usize);
             }
         });
+    }
+
+    // Double-click / Enter on a row -> launch it too (D-Fend behaviour).
+    {
+        let profiles = profiles.clone();
+        let settings = settings.clone();
+        let window = window.downgrade();
+        list.connect_row_activated(move |_, row| {
+            launch_entry(&profiles, &settings, window.upgrade(), row.index() as usize);
+        });
+    }
+
+    // Pre-select the first profile so the detail pane is populated on start.
+    if let Some(first) = list.row_at_index(0) {
+        list.select_row(Some(&first));
+        first.grab_focus();
     }
 
     let root = Paned::builder()
@@ -103,6 +106,29 @@ pub fn build(app: &Application) {
     window.set_child(Some(&root));
 
     window.present();
+}
+
+/// Launch the profile at `index`, reporting failures in a dialog.
+/// Shared by the Play button and row activation (double-click / Enter).
+fn launch_entry(
+    profiles: &[Entry],
+    settings: &AppSettings,
+    window: Option<ApplicationWindow>,
+    index: usize,
+) {
+    let Some((dir, profile)) = profiles.get(index) else {
+        return;
+    };
+    if let Err(e) = launcher::launch(dir, profile, settings) {
+        log::error!("launch failed: {e:#}");
+        if let Some(window) = window {
+            AlertDialog::builder()
+                .message(format!("Could not launch {}", profile.title))
+                .detail(format!("{e:#}"))
+                .build()
+                .show(Some(&window));
+        }
+    }
 }
 
 /// Load every profile from the data dir; an error yields an empty list (logged).
