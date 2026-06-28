@@ -143,6 +143,69 @@ fn is_false(b: &bool) -> bool {
     !*b
 }
 
+/// A filesystem-safe lowercase slug for a title; "profile" when empty.
+pub fn slugify(title: &str) -> String {
+    let slug = title
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    if slug.is_empty() {
+        "profile".to_string()
+    } else {
+        slug
+    }
+}
+
+/// Pick a free profile id/dir under `root` from `title`, suffixing `-2`, `-3`…
+/// on collision. Pure (takes the root) so it is unit-testable.
+pub fn allocate_dir(root: &Path, title: &str) -> (String, PathBuf) {
+    let base = slugify(title);
+    let mut id = base.clone();
+    let mut n = 2;
+    while root.join(&id).exists() {
+        id = format!("{base}-{n}");
+        n += 1;
+    }
+    let dir = root.join(&id);
+    (id, dir)
+}
+
+/// Allocate a new profile id/dir under the real profiles root.
+pub fn new_profile_dir(title: &str) -> Result<(String, PathBuf)> {
+    Ok(allocate_dir(&super::paths::profiles_dir()?, title))
+}
+
+/// File names of DOS executables (`.exe`/`.bat`/`.com`) directly in `dir`,
+/// sorted case-insensitively. Used by the new-profile wizard.
+pub fn scan_executables(dir: &Path) -> Vec<String> {
+    let mut out = Vec::new();
+    let Ok(entries) = fs::read_dir(dir) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(str::to_lowercase);
+        if matches!(ext.as_deref(), Some("exe" | "bat" | "com")) {
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                out.push(name.to_string());
+            }
+        }
+    }
+    out.sort_by_key(|s| s.to_lowercase());
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -211,5 +274,43 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let missing = root.path().join("nope");
         assert!(scan(&missing).unwrap().is_empty());
+    }
+
+    #[test]
+    fn slugify_normalizes_titles() {
+        assert_eq!(slugify("Dune II"), "dune-ii");
+        assert_eq!(slugify("  Commander Keen 4!  "), "commander-keen-4");
+        assert_eq!(slugify("X-COM: UFO Defense"), "x-com-ufo-defense");
+        assert_eq!(slugify(""), "profile");
+        assert_eq!(slugify("***"), "profile");
+    }
+
+    #[test]
+    fn allocate_dir_suffixes_on_collision() {
+        let root = tempfile::tempdir().unwrap();
+        let (id, dir) = allocate_dir(root.path(), "Dune II");
+        assert_eq!(id, "dune-ii");
+        fs::create_dir_all(&dir).unwrap();
+
+        let (id2, _) = allocate_dir(root.path(), "Dune II");
+        assert_eq!(id2, "dune-ii-2");
+    }
+
+    #[test]
+    fn scan_executables_finds_dos_programs() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in [
+            "DUNE2.EXE",
+            "install.bat",
+            "GO.COM",
+            "readme.txt",
+            "data.dat",
+        ] {
+            fs::write(dir.path().join(name), b"x").unwrap();
+        }
+        fs::create_dir(dir.path().join("SAVE.EXE")).unwrap(); // a dir, not a file
+
+        let found = scan_executables(dir.path());
+        assert_eq!(found, vec!["DUNE2.EXE", "GO.COM", "install.bat"]);
     }
 }

@@ -19,8 +19,7 @@ use gtk::{
 use indexmap::IndexMap;
 
 use crate::config::dosbox_conf::DosboxConfig;
-use crate::config::paths;
-use crate::config::profile::{Mount, MountKind, Profile, RunSpec};
+use crate::config::profile::{self, Mount, MountKind, Profile, RunSpec};
 use crate::ui::widgets;
 
 /// Sentinel first option meaning "don't set this key — use the DOSBox default".
@@ -734,35 +733,10 @@ fn resolve_dir(target: &Target, profile: &mut Profile) -> anyhow::Result<PathBuf
     match target {
         Target::Existing(dir) => Ok(dir.clone()),
         Target::New => {
-            let root = paths::profiles_dir()?;
-            let base = slugify(&profile.title);
-            let mut id = base.clone();
-            let mut n = 2;
-            while root.join(&id).exists() {
-                id = format!("{base}-{n}");
-                n += 1;
-            }
-            profile.id = id.clone();
-            Ok(root.join(id))
+            let (id, dir) = profile::new_profile_dir(&profile.title)?;
+            profile.id = id;
+            Ok(dir)
         }
-    }
-}
-
-/// A filesystem-safe lowercase slug; falls back to "profile" when empty.
-fn slugify(title: &str) -> String {
-    let slug = title
-        .to_lowercase()
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect::<String>()
-        .split('-')
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join("-");
-    if slug.is_empty() {
-        "profile".to_string()
-    } else {
-        slug
     }
 }
 
@@ -846,19 +820,6 @@ fn none_if_empty(text: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn slugify_normalizes_titles() {
-        assert_eq!(slugify("Dune II"), "dune-ii");
-        assert_eq!(slugify("  Commander Keen 4!  "), "commander-keen-4");
-        assert_eq!(slugify("X-COM: UFO Defense"), "x-com-ufo-defense");
-    }
-
-    #[test]
-    fn slugify_falls_back_when_empty() {
-        assert_eq!(slugify(""), "profile");
-        assert_eq!(slugify("***"), "profile");
-    }
 
     #[test]
     fn passthrough_round_trips() {
