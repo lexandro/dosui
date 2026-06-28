@@ -34,8 +34,31 @@ natívan illeszkedik a Linux desktophoz.
 
 ## Állapot
 
-🚧 **Korai tervezési fázis.** A megvalósítás nyelve és a GUI toolkit még
-nincs eldöntve — lásd a `docs/` mappát a tervezési jegyzetekhez.
+✅ **Működő frontend.** Stack: **Rust + GTK4** (libadwaita nélkül), motor:
+**dosbox-staging**. Megvan: profil-rács borítókkal, indítás, tabos
+profilszerkesztő, új-profil varázsló (exe-szkenneléssel), globális defaultok +
+öröklés, menüsor + toolbar, és egyetlen **AppImage** becsomagolt dosbox-staginggel.
+
+## Fejlesztés
+
+```
+cargo run                  # futtatás (RUST_LOG=debug a bőbeszédű loghoz)
+cargo test                 # a GTK-mentes core unit-tesztjei
+cargo clippy && cargo fmt  # lint + formázás commit előtt
+```
+
+Előfeltételek (Debian/Ubuntu/Mint): `sudo apt install build-essential libgtk-4-dev`
+(+ `librsvg2-common` az SVG ikonokhoz).
+
+## Csomagolás (AppImage)
+
+```
+./packaging/build-appimage.sh      # -> dist/dosui-x86_64.AppImage
+```
+
+Egyetlen önálló fájl: tartalmazza a GTK4 runtime-ot és a **dosbox-staging**-et,
+mégis a gazdagép GTK-témáját követi. A dosbox-staging hordozható buildjét a
+`~/.local/opt/dosbox-staging*` mappából veszi (vagy `DOSBOX_STAGING_DIR`).
 
 ## Nem cél (egyelőre)
 
