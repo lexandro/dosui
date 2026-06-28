@@ -3,10 +3,10 @@
 //! Everything in this module is GTK-free so it can be unit-tested without a
 //! display server (see the plan's verification section).
 
+pub mod dosbox_conf;
 pub mod paths;
 pub mod profile;
 
 // Filled in during M1+:
 // pub mod settings;
 // pub mod defaults;
-// pub mod dosbox_conf;

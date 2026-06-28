@@ -11,6 +11,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
+use super::dosbox_conf::DosboxConfig;
+
 /// File name of the profile descriptor inside each profile directory.
 pub const PROFILE_FILE: &str = "profile.toml";
 
@@ -42,6 +44,11 @@ pub struct Profile {
 
     /// What to mount and execute. Drives the generated `[autoexec]`.
     pub run: RunSpec,
+
+    /// Per-profile DOSBox settings. Unset (`None`) leaves use dosbox defaults
+    /// now; in M4 they inherit from the global defaults.
+    #[serde(default)]
+    pub dosbox: DosboxConfig,
 }
 
 /// What DOSBox should mount and run for this profile.
@@ -128,7 +135,7 @@ pub fn scan(profiles_dir: &Path) -> Result<Vec<(PathBuf, Profile)>> {
             Err(e) => log::warn!("skipping {}: {e:#}", dir.display()),
         }
     }
-    out.sort_by(|a, b| a.1.title.to_lowercase().cmp(&b.1.title.to_lowercase()));
+    out.sort_by_key(|(_, p)| p.title.to_lowercase());
     Ok(out)
 }
 
@@ -163,6 +170,10 @@ mod tests {
                 command: "DUNE2.EXE".into(),
                 args: vec![],
                 exit_after: true,
+            },
+            dosbox: DosboxConfig {
+                cycles: Some("max".into()),
+                ..Default::default()
             },
         }
     }
