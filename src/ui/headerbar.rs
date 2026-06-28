@@ -42,6 +42,7 @@ pub(crate) fn build_header() -> Header {
 pub(crate) fn build_menubar() -> PopoverMenuBar {
     let file = gio::Menu::new();
     file.append(Some("New profile"), Some("app.new"));
+    file.append(Some("Open DOS console"), Some("app.console"));
     file.append(Some("Import dosbox.conf…"), Some("app.import"));
     file.append(Some("Import zipped game…"), Some("app.import-zip"));
     file.append(Some("Quit"), Some("app.quit"));
@@ -88,6 +89,11 @@ pub(crate) fn build_toolbar() -> GtkBox {
         .margin_end(4)
         .build();
     bar.append(&tool_button("list-add-symbolic", "New profile", "app.new"));
+    bar.append(&tool_button(
+        "utilities-terminal-symbolic",
+        "Open DOS console",
+        "app.console",
+    ));
     bar.append(&Separator::new(Orientation::Vertical));
     bar.append(&tool_button(
         "media-playback-start-symbolic",

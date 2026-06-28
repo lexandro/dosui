@@ -167,21 +167,32 @@ impl DosboxConfig {
 }
 
 /// Build the `[autoexec]` lines: mounts, switch drive, run command, optional exit.
+///
+/// An empty command means "DOS console": mount the drives, switch into the
+/// working drive (only if it was mounted), and stay at the prompt — no exit — so
+/// the user can run things by hand.
 fn autoexec_lines(run: &RunSpec) -> Vec<String> {
     let mut lines = Vec::new();
-
     for m in &run.mounts {
         lines.push(mount_line(m));
     }
-    lines.push(format!("{}:", run.working_drive));
 
+    let working_mounted = run.mounts.iter().any(|m| m.drive == run.working_drive);
+
+    if run.command.trim().is_empty() {
+        if working_mounted {
+            lines.push(format!("{}:", run.working_drive));
+        }
+        return lines; // console: drop to the prompt, no command, no exit
+    }
+
+    lines.push(format!("{}:", run.working_drive));
     let mut command = run.command.clone();
     if !run.args.is_empty() {
         command.push(' ');
         command.push_str(&run.args.join(" "));
     }
     lines.push(command);
-
     if run.exit_after {
         lines.push("exit".to_string());
     }
@@ -249,6 +260,25 @@ mod tests {
             conf,
             "[autoexec]\nmount C \"/games/dune 2\"\nC:\nDUNE2.EXE\nexit\n"
         );
+    }
+
+    #[test]
+    fn empty_command_opens_console() {
+        // With a mount: switch into it, stay at the prompt (no command, no exit).
+        let mut r = run(true);
+        r.command = String::new();
+        let conf = DosboxConfig::default().render(&r);
+        assert_eq!(conf, "[autoexec]\nmount C \"/games/dune 2\"\nC:\n");
+
+        // No mounts: just the bare Z:\ prompt (no drive switch).
+        let bare = RunSpec {
+            mounts: vec![],
+            working_drive: 'C',
+            command: String::new(),
+            args: vec![],
+            exit_after: true,
+        };
+        assert_eq!(DosboxConfig::default().render(&bare), "[autoexec]\n");
     }
 
     #[test]

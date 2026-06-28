@@ -68,6 +68,20 @@ pub(crate) fn install_actions(
     }
     app.add_action(&new);
 
+    let console = gio::SimpleAction::new("console", None);
+    {
+        let window = window.downgrade();
+        console.connect_activate(move |_, _| {
+            if let Err(e) = launcher::launch_console() {
+                log::error!("opening DOS console failed: {e:#}");
+                if let Some(window) = window.upgrade() {
+                    report(&window, "Could not open DOS console", &e);
+                }
+            }
+        });
+    }
+    app.add_action(&console);
+
     install_import_actions(app, window, reload);
 
     let bulk_edit = gio::SimpleAction::new("bulk-edit", None);
@@ -228,6 +242,7 @@ fn set_accels(app: &Application) {
     app.set_accels_for_action("app.play", &["<Ctrl>p"]);
     app.set_accels_for_action("app.edit", &["<Ctrl>e"]);
     app.set_accels_for_action("app.new", &["<Ctrl>n"]);
+    app.set_accels_for_action("app.console", &["<Ctrl>t"]);
     app.set_accels_for_action("app.import", &["<Ctrl>i"]);
     app.set_accels_for_action("app.duplicate", &["<Ctrl>d"]);
     app.set_accels_for_action("app.delete", &["Delete"]);

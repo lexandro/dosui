@@ -12,11 +12,11 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use gtk::gio;
 
-use crate::config::defaults;
 use crate::config::dosbox_conf::DosboxConfig;
 use crate::config::profile::Profile;
 use crate::config::profile::RunSpec;
 use crate::config::settings::AppSettings;
+use crate::config::{defaults, paths};
 
 /// Generated config file name written into each profile directory.
 const CONF_FILE: &str = "dosbox.conf";
@@ -34,6 +34,24 @@ pub fn launch(profile_dir: &Path, profile: &Profile) -> Result<()> {
         .with_context(|| format!("launching {}", binary.display()))?;
     record_last_played(profile_dir, profile);
     Ok(())
+}
+
+/// Launch a bare DOSBox console (no game): the global defaults plus an empty
+/// run, so DOSBox drops to the prompt and the user runs things by hand. The
+/// generated conf lives in the cache dir (it is not a saved profile).
+pub fn launch_console() -> Result<()> {
+    let dir = paths::cache_dir()?.join("console");
+    let effective = defaults::load();
+    let run = RunSpec {
+        mounts: Vec::new(),
+        working_drive: 'C',
+        command: String::new(),
+        args: Vec::new(),
+        exit_after: false,
+    };
+    let conf_path = write_conf(&dir, &effective, &run)?;
+    let binary = resolve_dosbox(&AppSettings::load())?;
+    spawn(&binary, &conf_path, &dir).with_context(|| format!("launching {}", binary.display()))
 }
 
 /// Best-effort update of the profile's `last_played` timestamp after a launch.
