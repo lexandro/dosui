@@ -272,6 +272,7 @@ fn build_profile(wiz: &Wiz) -> Profile {
             exit_after: true,
         },
         dosbox: DosboxConfig::default(),
+        last_played: None,
     }
 }
 

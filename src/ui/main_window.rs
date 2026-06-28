@@ -31,6 +31,7 @@ struct Detail {
     title: Label,
     meta: Label,
     notes: Label,
+    last_played: Label,
     play: Button,
     edit: Button,
 }
@@ -300,6 +301,10 @@ fn build_detail() -> Detail {
         .halign(gtk::Align::Start)
         .wrap(true)
         .build();
+    let last_played = Label::builder()
+        .halign(gtk::Align::Start)
+        .css_classes(["dim-label"])
+        .build();
     let play = Button::builder()
         .label("Play")
         .css_classes(["suggested-action"])
@@ -325,6 +330,7 @@ fn build_detail() -> Detail {
     container.append(&title);
     container.append(&meta);
     container.append(&notes);
+    container.append(&last_played);
     container.append(&actions);
 
     let detail = Detail {
@@ -332,6 +338,7 @@ fn build_detail() -> Detail {
         title,
         meta,
         notes,
+        last_played,
         play,
         edit,
     };
@@ -346,6 +353,7 @@ fn show_profile(detail: &Detail, profile: &Profile) {
     detail
         .notes
         .set_text(profile.notes.as_deref().unwrap_or(""));
+    detail.last_played.set_text(&last_played_line(profile));
     detail.play.set_sensitive(true);
     detail.edit.set_sensitive(true);
 }
@@ -355,8 +363,20 @@ fn clear_detail(detail: &Detail) {
     detail.title.set_text("Select a profile");
     detail.meta.set_text("");
     detail.notes.set_text("");
+    detail.last_played.set_text("");
     detail.play.set_sensitive(false);
     detail.edit.set_sensitive(false);
+}
+
+/// "Last played: …" line, or empty if never played.
+fn last_played_line(profile: &Profile) -> String {
+    match profile.last_played {
+        Some(then) => format!(
+            "Last played: {}",
+            profile::humanize_since(profile::now_unix(), then)
+        ),
+        None => "Never played".to_string(),
+    }
 }
 
 /// "Genre · Year · Developer" from whatever fields are present.

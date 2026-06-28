@@ -31,7 +31,18 @@ pub fn launch(profile_dir: &Path, profile: &Profile) -> Result<()> {
     let conf_path = write_conf(profile_dir, &effective, &profile.run)?;
     let binary = resolve_dosbox(&AppSettings::load())?;
     spawn(&binary, &conf_path, profile_dir)
-        .with_context(|| format!("launching {}", binary.display()))
+        .with_context(|| format!("launching {}", binary.display()))?;
+    record_last_played(profile_dir, profile);
+    Ok(())
+}
+
+/// Best-effort update of the profile's `last_played` timestamp after a launch.
+fn record_last_played(profile_dir: &Path, profile: &Profile) {
+    let mut updated = profile.clone();
+    updated.last_played = Some(crate::config::profile::now_unix());
+    if let Err(e) = updated.save(profile_dir) {
+        log::warn!("could not record last_played: {e:#}");
+    }
 }
 
 /// Render and write `<profile_dir>/dosbox.conf`, returning its path.
@@ -131,6 +142,7 @@ mod tests {
                 exit_after: true,
             },
             dosbox: Default::default(),
+            last_played: None,
         };
 
         let path = write_conf(tmp.path(), &profile.dosbox, &profile.run).unwrap();
