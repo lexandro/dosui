@@ -44,6 +44,10 @@ SOLID / DRY / KISS / YAGNI as **defaults you can break with a reason**:
 load, understand, and safely change it with **minimum tokens**. Concretely:
 - **One concept per file; small files.** The AI should load only what it needs. If a
   file does two things, split it. Filename = concept (greppable).
+- **≤150 lines per file where possible.** Treat 150 lines as a soft cap: past it,
+  look for a concept to split out. Going over is allowed only when *justified* —
+  e.g. a cohesive data model plus its inline `#[test]`s, or one GTK widget tree that
+  would be more confusing if split. Note the justification in the module doc comment.
 - **Explicit over clever.** Clear names, concrete types, obvious control flow. No
   macro magic, hidden side effects, or deep indirection — every hop costs the AI tokens
   and risk. Code that's boring to read is cheap to change.
