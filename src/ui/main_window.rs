@@ -28,6 +28,7 @@ struct Detail {
     meta: Label,
     notes: Label,
     play: Button,
+    edit: Button,
 }
 
 pub fn build(app: &Application) {
@@ -88,6 +89,33 @@ pub fn build(app: &Application) {
         let window = window.downgrade();
         list.connect_row_activated(move |_, row| {
             launch_entry(&profiles, &settings, window.upgrade(), row.index() as usize);
+        });
+    }
+
+    // Edit -> open the profile editor for the selected profile.
+    {
+        let profiles = profiles.clone();
+        let window = window.downgrade();
+        let list = list.clone();
+        detail.edit.connect_clicked(move |_| {
+            let Some(row) = list.selected_row() else {
+                return;
+            };
+            let Some((dir, profile)) = profiles.get(row.index() as usize) else {
+                return;
+            };
+            let Some(window) = window.upgrade() else {
+                return;
+            };
+            // M2.5 will swap this for a real list refresh.
+            let on_saved: Rc<dyn Fn()> =
+                Rc::new(|| log::info!("profile saved (restart to see list changes)"));
+            crate::ui::profile_editor::open_for_edit(
+                &window,
+                dir.clone(),
+                profile.clone(),
+                on_saved,
+            );
         });
     }
 
@@ -193,9 +221,16 @@ fn build_detail() -> Detail {
     let play = Button::builder()
         .label("Play")
         .css_classes(["suggested-action"])
-        .halign(gtk::Align::Start)
         .sensitive(false)
         .build();
+    let edit = Button::builder().label("Edit").sensitive(false).build();
+    let actions = GtkBox::builder()
+        .orientation(Orientation::Horizontal)
+        .spacing(8)
+        .halign(gtk::Align::Start)
+        .build();
+    actions.append(&play);
+    actions.append(&edit);
 
     let container = GtkBox::builder()
         .orientation(Orientation::Vertical)
@@ -208,7 +243,7 @@ fn build_detail() -> Detail {
     container.append(&title);
     container.append(&meta);
     container.append(&notes);
-    container.append(&play);
+    container.append(&actions);
 
     let detail = Detail {
         container,
@@ -216,6 +251,7 @@ fn build_detail() -> Detail {
         meta,
         notes,
         play,
+        edit,
     };
     clear_detail(&detail);
     detail
@@ -229,6 +265,7 @@ fn show_profile(detail: &Detail, profile: &Profile) {
         .notes
         .set_text(profile.notes.as_deref().unwrap_or(""));
     detail.play.set_sensitive(true);
+    detail.edit.set_sensitive(true);
 }
 
 /// Reset the detail pane to the empty state.
@@ -237,6 +274,7 @@ fn clear_detail(detail: &Detail) {
     detail.meta.set_text("");
     detail.notes.set_text("");
     detail.play.set_sensitive(false);
+    detail.edit.set_sensitive(false);
 }
 
 /// "Genre · Year · Developer" from whatever fields are present.
