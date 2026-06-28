@@ -13,7 +13,7 @@ use gtk::prelude::*;
 use gtk::{
     gio, AlertDialog, Application, ApplicationWindow, Box as GtkBox, Button, ContentFit,
     FileLauncher, GridView, HeaderBar, Label, ListItem, Orientation, Paned, Picture,
-    ScrolledWindow, SearchEntry, SignalListItemFactory, SingleSelection,
+    ScrolledWindow, SearchEntry, Separator, SignalListItemFactory, SingleSelection,
 };
 
 use crate::app::APP_NAME;
@@ -101,10 +101,63 @@ pub fn build(app: &Application) {
         .position(360)
         .start_child(&grid_scroller)
         .end_child(&detail.container)
+        .vexpand(true)
         .build();
-    window.set_child(Some(&root));
+    let body = GtkBox::builder().orientation(Orientation::Vertical).build();
+    body.append(&build_toolbar());
+    body.append(&root);
+    window.set_child(Some(&body));
 
     window.present();
+}
+
+/// A flat icon toolbar button bound to an app action.
+fn tool_button(icon: &str, tooltip: &str, action: &str) -> Button {
+    let button = Button::builder()
+        .icon_name(icon)
+        .tooltip_text(tooltip)
+        .css_classes(["flat"])
+        .build();
+    button.set_action_name(Some(action));
+    button
+}
+
+/// D-Fend-style quick-action toolbar (all commands are app actions).
+fn build_toolbar() -> GtkBox {
+    let bar = GtkBox::builder()
+        .orientation(Orientation::Horizontal)
+        .spacing(2)
+        .margin_top(4)
+        .margin_bottom(4)
+        .margin_start(4)
+        .margin_end(4)
+        .build();
+    bar.append(&tool_button("list-add-symbolic", "New profile", "app.new"));
+    bar.append(&Separator::new(Orientation::Vertical));
+    bar.append(&tool_button(
+        "media-playback-start-symbolic",
+        "Run",
+        "app.play",
+    ));
+    bar.append(&tool_button("document-edit-symbolic", "Edit", "app.edit"));
+    bar.append(&tool_button(
+        "edit-copy-symbolic",
+        "Duplicate",
+        "app.duplicate",
+    ));
+    bar.append(&tool_button("user-trash-symbolic", "Delete", "app.delete"));
+    bar.append(&tool_button(
+        "folder-open-symbolic",
+        "Open folder",
+        "app.open-folder",
+    ));
+    bar.append(&Separator::new(Orientation::Vertical));
+    bar.append(&tool_button(
+        "emblem-system-symbolic",
+        "Settings",
+        "app.settings",
+    ));
+    bar
 }
 
 /// Build the factory that renders each grid cell (cover thumbnail + title).
@@ -330,6 +383,20 @@ fn install_actions(
         quit.connect_activate(move |_, _| app.quit());
     }
     app.add_action(&quit);
+
+    // Disable selection-dependent commands when nothing is selected.
+    let dependent = vec![play, edit, duplicate, delete, open_folder];
+    let update_enabled = {
+        let selection = selection.clone();
+        move || {
+            let enabled = selected_index(&selection).is_some();
+            for action in &dependent {
+                action.set_enabled(enabled);
+            }
+        }
+    };
+    update_enabled();
+    selection.connect_selected_notify(move |_| update_enabled());
 
     app.set_accels_for_action("app.play", &["<Ctrl>p"]);
     app.set_accels_for_action("app.edit", &["<Ctrl>e"]);
