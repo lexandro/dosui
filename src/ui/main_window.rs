@@ -117,7 +117,7 @@ pub fn build(app: &Application) {
 
     // Buttons route through GActions: single source of truth, accelerators, and
     // external testability (`gapplication action io.github.dosui play`).
-    install_actions(app, &window, &selection, &reload);
+    install_actions(app, &window, &selection, &profiles, &reload);
     detail.play.set_action_name(Some("app.play"));
     detail.edit.set_action_name(Some("app.edit"));
     header.new_profile.set_action_name(Some("app.new"));
@@ -163,6 +163,9 @@ fn build_menubar() -> PopoverMenuBar {
     file.append(Some("Import zipped game…"), Some("app.import-zip"));
     file.append(Some("Quit"), Some("app.quit"));
 
+    let tools = gio::Menu::new();
+    tools.append(Some("Bulk edit…"), Some("app.bulk-edit"));
+
     let settings = gio::Menu::new();
     settings.append(Some("Preferences"), Some("app.settings"));
 
@@ -172,6 +175,7 @@ fn build_menubar() -> PopoverMenuBar {
     let menu = gio::Menu::new();
     menu.append_submenu(Some("File"), &file);
     menu.append_submenu(Some("Profile"), &build_profile_menu());
+    menu.append_submenu(Some("Tools"), &tools);
     menu.append_submenu(Some("Settings"), &settings);
     menu.append_submenu(Some("Help"), &help);
 
@@ -330,6 +334,7 @@ fn install_actions(
     app: &Application,
     window: &ApplicationWindow,
     selection: &SingleSelection,
+    profiles: &Profiles,
     reload: &Rc<dyn Fn()>,
 ) {
     let play = gio::SimpleAction::new("play", None);
@@ -437,6 +442,19 @@ fn install_actions(
         });
     }
     app.add_action(&import_zip);
+
+    let bulk_edit = gio::SimpleAction::new("bulk-edit", None);
+    {
+        let profiles = profiles.clone();
+        let window = window.downgrade();
+        let reload = reload.clone();
+        bulk_edit.connect_activate(move |_, _| {
+            if let Some(window) = window.upgrade() {
+                crate::ui::bulk_edit::open(&window, profiles.borrow().clone(), reload.clone());
+            }
+        });
+    }
+    app.add_action(&bulk_edit);
 
     let settings = gio::SimpleAction::new("settings", None);
     {
