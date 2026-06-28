@@ -1,8 +1,9 @@
 //! The main application window: cover grid (left) + detail/Play (right).
 //!
-//! The grid is a `GridView` over a `ListStore` of profiles (boxed), mirroring the
-//! `profiles` Vec order so the selected position indexes straight into it. Pick a
-//! profile, Play, or Edit/create profiles.
+//! The grid is a `GridView` whose model is a `SingleSelection` over a
+//! `FilterListModel` over a `ListStore` of boxed profile entries. Selection-aware
+//! commands read the selected [`Entry`] from the selected item (not by index), so
+//! filtering (search/categories) doesn't disturb them.
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -12,8 +13,9 @@ use gtk::glib::BoxedAnyObject;
 use gtk::prelude::*;
 use gtk::{
     gio, AlertDialog, Application, ApplicationWindow, Box as GtkBox, Button, ContentFit,
-    FileLauncher, GridView, HeaderBar, Label, ListItem, Orientation, Paned, Picture,
-    PopoverMenuBar, ScrolledWindow, SearchEntry, Separator, SignalListItemFactory, SingleSelection,
+    CustomFilter, FileLauncher, FilterChange, FilterListModel, GridView, HeaderBar, Label,
+    ListItem, Orientation, Paned, Picture, PopoverMenuBar, ScrolledWindow, SearchEntry, Separator,
+    SignalListItemFactory, SingleSelection,
 };
 
 use crate::app::APP_NAME;
@@ -55,7 +57,13 @@ pub fn build(app: &Application) {
 
     let store = gio::ListStore::new::<BoxedAnyObject>();
     fill_store(&store, &profiles.borrow());
-    let selection = SingleSelection::new(Some(store.clone()));
+
+    // Find-as-you-type: a shared query string drives a CustomFilter over the store.
+    let query: Rc<RefCell<String>> = Rc::new(RefCell::new(String::new()));
+    let filter = build_filter(&query);
+    let filter_model = FilterListModel::new(Some(store.clone()), Some(filter.clone()));
+    let selection = SingleSelection::new(Some(filter_model));
+
     let grid = GridView::builder()
         .model(&selection)
         .factory(&build_factory())
@@ -71,10 +79,19 @@ pub fn build(app: &Application) {
 
     // Selection -> refresh the detail pane.
     {
-        let profiles = profiles.clone();
         let detail = detail.clone();
         selection.connect_selected_notify(move |sel| {
-            refresh_detail(sel, &profiles, &detail);
+            refresh_detail(sel, &detail);
+        });
+    }
+
+    // Search entry re-runs the filter.
+    {
+        let query = query.clone();
+        let filter = filter.clone();
+        header.search.connect_search_changed(move |entry| {
+            *query.borrow_mut() = entry.text().to_string();
+            filter.changed(FilterChange::Different);
         });
     }
 
@@ -83,7 +100,7 @@ pub fn build(app: &Application) {
 
     // Buttons route through GActions: single source of truth, accelerators, and
     // external testability (`gapplication action io.github.dosui play`).
-    install_actions(app, &window, &selection, &profiles, &reload);
+    install_actions(app, &window, &selection, &reload);
     detail.play.set_action_name(Some("app.play"));
     detail.edit.set_action_name(Some("app.edit"));
     header.new_profile.set_action_name(Some("app.new"));
@@ -94,7 +111,7 @@ pub fn build(app: &Application) {
         let _ = WidgetExt::activate_action(grid, "app.play", None);
     });
 
-    select_first(&selection, &profiles, &detail);
+    select_first(&selection, &detail);
 
     let root = Paned::builder()
         .orientation(Orientation::Horizontal)
@@ -249,17 +266,15 @@ fn install_actions(
     app: &Application,
     window: &ApplicationWindow,
     selection: &SingleSelection,
-    profiles: &Profiles,
     reload: &Rc<dyn Fn()>,
 ) {
     let play = gio::SimpleAction::new("play", None);
     {
-        let profiles = profiles.clone();
         let selection = selection.clone();
         let window = window.downgrade();
         play.connect_activate(move |_, _| {
-            if let Some(i) = selected_index(&selection) {
-                launch_entry(&profiles.borrow(), window.upgrade(), i);
+            if let Some((dir, profile)) = selected_entry(&selection) {
+                launch_profile(&dir, &profile, window.upgrade());
             }
         });
     }
@@ -267,17 +282,12 @@ fn install_actions(
 
     let edit = gio::SimpleAction::new("edit", None);
     {
-        let profiles = profiles.clone();
         let selection = selection.clone();
         let window = window.downgrade();
         let reload = reload.clone();
         edit.connect_activate(move |_, _| {
-            let Some(i) = selected_index(&selection) else {
+            let Some((dir, prof)) = selected_entry(&selection) else {
                 return;
-            };
-            let (dir, prof) = match profiles.borrow().get(i) {
-                Some((dir, prof)) => (dir.clone(), prof.clone()),
-                None => return,
             };
             if let Some(window) = window.upgrade() {
                 profile_editor::open_for_edit(&window, dir, prof, reload.clone());
@@ -311,18 +321,14 @@ fn install_actions(
 
     let delete = gio::SimpleAction::new("delete", None);
     {
-        let profiles = profiles.clone();
         let selection = selection.clone();
         let window = window.downgrade();
         let reload = reload.clone();
         delete.connect_activate(move |_, _| {
-            let Some(i) = selected_index(&selection) else {
+            let Some((dir, prof)) = selected_entry(&selection) else {
                 return;
             };
-            let (dir, title) = match profiles.borrow().get(i) {
-                Some((dir, prof)) => (dir.clone(), prof.title.clone()),
-                None => return,
-            };
+            let title = prof.title.clone();
             let Some(window) = window.upgrade() else {
                 return;
             };
@@ -349,16 +355,11 @@ fn install_actions(
 
     let duplicate = gio::SimpleAction::new("duplicate", None);
     {
-        let profiles = profiles.clone();
         let selection = selection.clone();
         let reload = reload.clone();
         duplicate.connect_activate(move |_, _| {
-            let Some(i) = selected_index(&selection) else {
+            let Some((dir, prof)) = selected_entry(&selection) else {
                 return;
-            };
-            let (dir, prof) = match profiles.borrow().get(i) {
-                Some((dir, prof)) => (dir.clone(), prof.clone()),
-                None => return,
             };
             if let Err(e) = profile::duplicate(&dir, &prof) {
                 log::error!("duplicating profile failed: {e:#}");
@@ -370,16 +371,11 @@ fn install_actions(
 
     let open_folder = gio::SimpleAction::new("open-folder", None);
     {
-        let profiles = profiles.clone();
         let selection = selection.clone();
         let window = window.downgrade();
         open_folder.connect_activate(move |_, _| {
-            let Some(i) = selected_index(&selection) else {
+            let Some((dir, _)) = selected_entry(&selection) else {
                 return;
-            };
-            let dir = match profiles.borrow().get(i) {
-                Some((dir, _)) => dir.clone(),
-                None => return,
             };
             let launcher = FileLauncher::new(Some(&gio::File::for_path(&dir)));
             launcher.launch(window.upgrade().as_ref(), gio::Cancellable::NONE, |res| {
@@ -419,7 +415,7 @@ fn install_actions(
     let update_enabled = {
         let selection = selection.clone();
         move || {
-            let enabled = selected_index(&selection).is_some();
+            let enabled = selection.selected_item().is_some();
             for action in &dependent {
                 action.set_enabled(enabled);
             }
@@ -451,7 +447,7 @@ fn make_reload(
     Rc::new(move || {
         *profiles.borrow_mut() = load_profiles();
         fill_store(&store, &profiles.borrow());
-        select_first(&selection, &profiles, &detail);
+        select_first(&selection, &detail);
     })
 }
 
@@ -463,37 +459,46 @@ fn fill_store(store: &gio::ListStore, profiles: &[Entry]) {
     }
 }
 
-/// Index of the current selection, or `None` when nothing is selected.
-fn selected_index(selection: &SingleSelection) -> Option<usize> {
-    let pos = selection.selected();
-    if pos == gtk::INVALID_LIST_POSITION {
-        None
-    } else {
-        Some(pos as usize)
-    }
+/// A title-substring filter driven by the shared `query` string.
+fn build_filter(query: &Rc<RefCell<String>>) -> CustomFilter {
+    let query = query.clone();
+    CustomFilter::new(move |obj| {
+        let needle = query.borrow().to_lowercase();
+        if needle.is_empty() {
+            return true;
+        }
+        obj.downcast_ref::<BoxedAnyObject>()
+            .map(|o| o.borrow::<Entry>().1.title.to_lowercase().contains(&needle))
+            .unwrap_or(true)
+    })
+}
+
+/// The selected profile entry (directory + profile), if any.
+fn selected_entry(selection: &SingleSelection) -> Option<Entry> {
+    selection
+        .selected_item()
+        .and_downcast::<BoxedAnyObject>()
+        .map(|o| o.borrow::<Entry>().clone())
 }
 
 /// Select the first item (populating the detail pane), or clear it if empty.
-fn select_first(selection: &SingleSelection, profiles: &Profiles, detail: &Detail) {
+fn select_first(selection: &SingleSelection, detail: &Detail) {
     if selection.n_items() > 0 {
         selection.set_selected(0);
     }
-    refresh_detail(selection, profiles, detail);
+    refresh_detail(selection, detail);
 }
 
 /// Update the detail pane to reflect the current selection.
-fn refresh_detail(selection: &SingleSelection, profiles: &Profiles, detail: &Detail) {
-    match selected_index(selection).and_then(|i| profiles.borrow().get(i).cloned()) {
+fn refresh_detail(selection: &SingleSelection, detail: &Detail) {
+    match selected_entry(selection) {
         Some((dir, profile)) => show_profile(detail, &dir, &profile),
         None => clear_detail(detail),
     }
 }
 
-/// Launch the profile at `index`, reporting failures in a dialog.
-fn launch_entry(profiles: &[Entry], window: Option<ApplicationWindow>, index: usize) {
-    let Some((dir, profile)) = profiles.get(index) else {
-        return;
-    };
+/// Launch a profile, reporting failures in a dialog.
+fn launch_profile(dir: &Path, profile: &Profile, window: Option<ApplicationWindow>) {
     if let Err(e) = launcher::launch(dir, profile) {
         log::error!("launch failed: {e:#}");
         if let Some(window) = window {
@@ -517,11 +522,12 @@ fn load_profiles() -> Vec<Entry> {
     }
 }
 
-/// Header bar plus the buttons the window wires up.
+/// Header bar plus the widgets the window wires up.
 struct Header {
     bar: HeaderBar,
     new_profile: Button,
     settings: Button,
+    search: SearchEntry,
 }
 
 fn build_header() -> Header {
@@ -536,15 +542,15 @@ fn build_header() -> Header {
         .tooltip_text("Settings & global defaults")
         .build();
     bar.pack_end(&settings);
-    bar.set_title_widget(Some(
-        &SearchEntry::builder()
-            .placeholder_text("Search profiles…")
-            .build(),
-    ));
+    let search = SearchEntry::builder()
+        .placeholder_text("Search profiles…")
+        .build();
+    bar.set_title_widget(Some(&search));
     Header {
         bar,
         new_profile,
         settings,
+        search,
     }
 }
 
