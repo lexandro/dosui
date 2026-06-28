@@ -12,7 +12,10 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use gtk::gio;
 
+use crate::config::defaults;
+use crate::config::dosbox_conf::DosboxConfig;
 use crate::config::profile::Profile;
+use crate::config::profile::RunSpec;
 use crate::config::settings::AppSettings;
 
 /// Generated config file name written into each profile directory.
@@ -23,17 +26,19 @@ const CONF_FILE: &str = "dosbox.conf";
 /// Returns once the process has been *spawned*; the game runs asynchronously so
 /// the UI never blocks. Exit status is logged when DOSBox quits.
 pub fn launch(profile_dir: &Path, profile: &Profile, settings: &AppSettings) -> Result<()> {
-    let conf_path = write_conf(profile_dir, profile)?;
+    // effective = global defaults <- per-profile overrides
+    let effective = defaults::load().merge(&profile.dosbox);
+    let conf_path = write_conf(profile_dir, &effective, &profile.run)?;
     let binary = resolve_dosbox(settings)?;
     spawn(&binary, &conf_path, profile_dir)
         .with_context(|| format!("launching {}", binary.display()))
 }
 
 /// Render and write `<profile_dir>/dosbox.conf`, returning its path.
-fn write_conf(profile_dir: &Path, profile: &Profile) -> Result<PathBuf> {
+fn write_conf(profile_dir: &Path, config: &DosboxConfig, run: &RunSpec) -> Result<PathBuf> {
     fs::create_dir_all(profile_dir)
         .with_context(|| format!("creating profile dir {}", profile_dir.display()))?;
-    let conf = profile.dosbox.render(&profile.run);
+    let conf = config.render(run);
     let conf_path = profile_dir.join(CONF_FILE);
     fs::write(&conf_path, conf).with_context(|| format!("writing {}", conf_path.display()))?;
     Ok(conf_path)
@@ -128,7 +133,7 @@ mod tests {
             dosbox: Default::default(),
         };
 
-        let path = write_conf(tmp.path(), &profile).unwrap();
+        let path = write_conf(tmp.path(), &profile.dosbox, &profile.run).unwrap();
         let written = fs::read_to_string(&path).unwrap();
         assert!(written.contains("[autoexec]"));
         assert!(written.contains("mount C \"/games/t\""));

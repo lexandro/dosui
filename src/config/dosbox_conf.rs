@@ -58,6 +58,37 @@ pub struct DosboxConfig {
 }
 
 impl DosboxConfig {
+    /// Layer `overrides` on top of `self` (the defaults): every set leaf in
+    /// `overrides` wins; unset (`None`) leaves inherit from `self`. Passthrough
+    /// maps merge per (section, key), with `overrides` winning.
+    ///
+    /// This is the inheritance model: `effective = defaults.merge(profile)`.
+    pub fn merge(&self, overrides: &DosboxConfig) -> DosboxConfig {
+        let pick = |o: &Option<String>, d: &Option<String>| o.clone().or_else(|| d.clone());
+
+        let mut passthrough = self.passthrough.clone();
+        for (section, keys) in &overrides.passthrough {
+            let target = passthrough.entry(section.clone()).or_default();
+            for (key, value) in keys {
+                target.insert(key.clone(), value.clone());
+            }
+        }
+
+        DosboxConfig {
+            output: pick(&overrides.output, &self.output),
+            machine: pick(&overrides.machine, &self.machine),
+            memsize: overrides.memsize.or(self.memsize),
+            core: pick(&overrides.core, &self.core),
+            cputype: pick(&overrides.cputype, &self.cputype),
+            cycles: pick(&overrides.cycles, &self.cycles),
+            aspect: overrides.aspect.or(self.aspect),
+            scaler: pick(&overrides.scaler, &self.scaler),
+            sbtype: pick(&overrides.sbtype, &self.sbtype),
+            rate: overrides.rate.or(self.rate),
+            passthrough,
+        }
+    }
+
     /// Render a full `dosbox.conf`: typed sections, then passthrough, then the
     /// `[autoexec]` block built from `run`.
     pub fn render(&self, run: &RunSpec) -> String {
@@ -257,6 +288,43 @@ mod tests {
         }];
         let conf = DosboxConfig::default().render(&r);
         assert!(conf.contains("imgmount D \"/iso/game.cue\" -t cdrom"));
+    }
+
+    #[test]
+    fn merge_overrides_win_and_unset_inherit() {
+        let defaults = DosboxConfig {
+            cycles: Some("auto".into()),
+            memsize: Some(16),
+            output: Some("opengl".into()),
+            ..Default::default()
+        };
+        let overrides = DosboxConfig {
+            cycles: Some("max".into()), // wins
+            memsize: None,              // inherits 16
+            ..Default::default()
+        };
+        let effective = defaults.merge(&overrides);
+        assert_eq!(effective.cycles.as_deref(), Some("max"));
+        assert_eq!(effective.memsize, Some(16));
+        assert_eq!(effective.output.as_deref(), Some("opengl"));
+    }
+
+    #[test]
+    fn merge_passthrough_combines_with_override_winning() {
+        let mut defaults = DosboxConfig::default();
+        let mut d = IndexMap::new();
+        d.insert("glshader".to_string(), "crt".to_string());
+        d.insert("aspect".to_string(), "true".to_string());
+        defaults.passthrough.insert("render".to_string(), d);
+
+        let mut overrides = DosboxConfig::default();
+        let mut o = IndexMap::new();
+        o.insert("glshader".to_string(), "sharp".to_string()); // wins
+        overrides.passthrough.insert("render".to_string(), o);
+
+        let effective = defaults.merge(&overrides);
+        assert_eq!(effective.passthrough["render"]["glshader"], "sharp");
+        assert_eq!(effective.passthrough["render"]["aspect"], "true");
     }
 
     #[test]
