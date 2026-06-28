@@ -13,12 +13,13 @@ use gtk::glib::BoxedAnyObject;
 use gtk::prelude::*;
 use gtk::{
     gio, AlertDialog, Application, ApplicationWindow, Box as GtkBox, Button, ContentFit,
-    CustomFilter, FileLauncher, FilterChange, FilterListModel, GridView, HeaderBar, Label,
-    ListItem, Orientation, Paned, Picture, PopoverMenu, PopoverMenuBar, ScrolledWindow,
+    CustomFilter, FileDialog, FileLauncher, FilterChange, FilterListModel, GridView, HeaderBar,
+    Label, ListItem, Orientation, Paned, Picture, PopoverMenu, PopoverMenuBar, ScrolledWindow,
     SearchEntry, Separator, SignalListItemFactory, SingleSelection,
 };
 
 use crate::app::APP_NAME;
+use crate::config::conf_import;
 use crate::config::profile::{self, Profile};
 use crate::launcher;
 use crate::ui::category_sidebar::{Category, CategorySidebar};
@@ -155,6 +156,7 @@ pub fn build(app: &Application) {
 fn build_menubar() -> PopoverMenuBar {
     let file = gio::Menu::new();
     file.append(Some("New profile"), Some("app.new"));
+    file.append(Some("Import dosbox.conf…"), Some("app.import"));
     file.append(Some("Quit"), Some("app.quit"));
 
     let settings = gio::Menu::new();
@@ -364,7 +366,45 @@ fn install_actions(
             }
         });
     }
-    app.add_action(&new);
+    let import = gio::SimpleAction::new("import", None);
+    {
+        let window = window.downgrade();
+        let reload = reload.clone();
+        import.connect_activate(move |_, _| {
+            let Some(window) = window.upgrade() else {
+                return;
+            };
+            let dialog = FileDialog::builder().title("Import dosbox.conf").build();
+            let reload = reload.clone();
+            let parent = window.clone();
+            dialog.open(Some(&window), gio::Cancellable::NONE, move |res| {
+                let Ok(file) = res else { return };
+                let Some(path) = file.path() else { return };
+                match std::fs::read_to_string(&path) {
+                    Ok(text) => {
+                        let title = path
+                            .parent()
+                            .and_then(|p| p.file_name())
+                            .or_else(|| path.file_stem())
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("Imported game")
+                            .to_string();
+                        if let Err(e) = save_imported(&text, &title) {
+                            log::error!("import failed: {e:#}");
+                            AlertDialog::builder()
+                                .message("Could not import dosbox.conf")
+                                .detail(format!("{e:#}"))
+                                .build()
+                                .show(Some(&parent));
+                        }
+                        reload();
+                    }
+                    Err(e) => log::error!("reading {} failed: {e:#}", path.display()),
+                }
+            });
+        });
+    }
+    app.add_action(&import);
 
     let settings = gio::SimpleAction::new("settings", None);
     {
@@ -502,6 +542,7 @@ fn install_actions(
     app.set_accels_for_action("app.play", &["<Ctrl>p"]);
     app.set_accels_for_action("app.edit", &["<Ctrl>e"]);
     app.set_accels_for_action("app.new", &["<Ctrl>n"]);
+    app.set_accels_for_action("app.import", &["<Ctrl>i"]);
     app.set_accels_for_action("app.duplicate", &["<Ctrl>d"]);
     app.set_accels_for_action("app.delete", &["Delete"]);
     app.set_accels_for_action("app.settings", &["<Ctrl>comma"]);
@@ -591,6 +632,14 @@ fn launch_profile(dir: &Path, profile: &Profile, window: Option<ApplicationWindo
                 .show(Some(&window));
         }
     }
+}
+
+/// Import a dosbox.conf into a fresh profile directory.
+fn save_imported(text: &str, title: &str) -> anyhow::Result<()> {
+    let mut profile = conf_import::import_profile(text, title);
+    let (id, dir) = profile::new_profile_dir(&profile.title)?;
+    profile.id = id;
+    profile.save(&dir)
 }
 
 /// Load every profile from the data dir; an error yields an empty list (logged).
