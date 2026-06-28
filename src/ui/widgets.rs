@@ -7,6 +7,7 @@
 use gtk::prelude::*;
 use gtk::{
     Align, Box as GtkBox, Button, CheckButton, DropDown, Entry, Label, Orientation, SpinButton,
+    TextView,
 };
 
 const LABEL_WIDTH: i32 = 150;
@@ -93,6 +94,14 @@ pub fn dropdown(options: &[&str], selected: Option<&str>) -> DropDown {
 pub fn dropdown_row(label: &str, options: &[&str], selected: Option<&str>) -> (GtkBox, DropDown) {
     let dd = dropdown(options, selected);
     (labeled(label, &dd), dd)
+}
+
+/// Whole-buffer text of a `TextView`.
+pub fn textview_text(view: &TextView) -> String {
+    let buffer = view.buffer();
+    buffer
+        .text(&buffer.start_iter(), &buffer.end_iter(), false)
+        .to_string()
 }
 
 /// The currently selected option's text (`None` if nothing is selected).

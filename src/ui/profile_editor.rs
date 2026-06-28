@@ -1,9 +1,10 @@
 //! Modal profile editor (GtkNotebook with one tab per concern).
 //!
-//! The editor loads a full [`Profile`], lets the user edit the fields the tabs
-//! expose, and on Save writes `profile.toml` back. Any field a tab does not
-//! expose is preserved from the loaded profile (see [`collect`]). `on_saved`
-//! lets the caller refresh the main list.
+//! Loads a full [`Profile`], edits the fields the tabs expose, and on Save writes
+//! `profile.toml` back (fields no tab edits are preserved — see [`collect`]). The
+//! CPU/Graphics/Sound/Advanced tabs come from the shared [`DosboxForm`]. New
+//! profiles are created via the wizard; this only edits. `on_saved` refreshes the
+//! main list.
 
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -16,54 +17,17 @@ use gtk::{
     AlertDialog, ApplicationWindow, Box as GtkBox, Button, CheckButton, DropDown, Entry,
     FileDialog, Label, Notebook, Orientation, ScrolledWindow, TextView, Window,
 };
-use indexmap::IndexMap;
 
-use crate::config::dosbox_conf::DosboxConfig;
 use crate::config::profile::{Mount, MountKind, Profile, RunSpec};
+use crate::ui::dosbox_form::DosboxForm;
 use crate::ui::widgets;
 
-/// Sentinel first option meaning "don't set this key — use the DOSBox default".
-const DEFAULT: &str = "(default)";
+/// Unset DOSBox values in a profile inherit from the global defaults.
+const INHERIT: &str = "(inherit)";
 
-// Curated option lists for the DOSBox tabs. The profile's current value is added
-// dynamically if it isn't in the list, so arbitrary values are never lost.
-const OUTPUT_OPTS: [&str; 4] = [DEFAULT, "texture", "texturenb", "opengl"];
-const MACHINE_OPTS: [&str; 8] = [
-    DEFAULT,
-    "svga_s3",
-    "svga_et4000",
-    "vesa_nolfb",
-    "vgaonly",
-    "ega",
-    "cga",
-    "hercules",
-];
-const MEMSIZE_OPTS: [&str; 7] = [DEFAULT, "1", "4", "8", "16", "32", "64"];
-const CORE_OPTS: [&str; 5] = [DEFAULT, "auto", "normal", "dynamic", "simple"];
-const CPUTYPE_OPTS: [&str; 6] = [
-    DEFAULT,
-    "auto",
-    "386",
-    "386_slow",
-    "486_slow",
-    "pentium_slow",
-];
-const CYCLES_OPTS: [&str; 7] = [
-    DEFAULT,
-    "auto",
-    "max",
-    "fixed 3000",
-    "fixed 10000",
-    "fixed 20000",
-    "fixed 30000",
-];
-const SCALER_OPTS: [&str; 4] = [DEFAULT, "none", "normal2x", "normal3x"];
-const ASPECT_OPTS: [&str; 3] = [DEFAULT, "on", "off"];
-const SBTYPE_OPTS: [&str; 6] = [DEFAULT, "sb16", "sbpro2", "sb2", "gb", "none"];
-const RATE_OPTS: [&str; 6] = [DEFAULT, "22050", "32000", "44100", "48000", "49716"];
+const KIND_OPTIONS: [&str; 4] = ["Directory", "CD image", "Floppy image", "HDD image"];
 
-/// Drive-letter options (A–Z) shared by the working-drive and mount dropdowns.
-/// A static table so the `&str` refs are valid for both building and read-back.
+/// Drive-letter options (A–Z), shared by the working-drive and mount dropdowns.
 fn drive_letters() -> Vec<&'static str> {
     const L: [&str; 26] = [
         "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R",
@@ -71,8 +35,6 @@ fn drive_letters() -> Vec<&'static str> {
     ];
     L.to_vec()
 }
-
-const KIND_OPTIONS: [&str; 4] = ["Directory", "CD image", "Floppy image", "HDD image"];
 
 fn kind_to_text(kind: MountKind) -> &'static str {
     match kind {
@@ -96,23 +58,7 @@ fn text_to_kind(text: &str) -> MountKind {
 struct Fields {
     general: General,
     run: Run,
-    dos: Dos,
-}
-
-/// DOSBox config widgets (CPU / Graphics / Sound) + Advanced passthrough/preview.
-struct Dos {
-    output: DropDown,
-    machine: DropDown,
-    memsize: DropDown,
-    scaler: DropDown,
-    aspect: DropDown,
-    core: DropDown,
-    cputype: DropDown,
-    cycles: DropDown,
-    sbtype: DropDown,
-    rate: DropDown,
-    passthrough: TextView,
-    preview: TextView,
+    dos: DosboxForm,
 }
 
 struct General {
@@ -142,7 +88,6 @@ struct MountRow {
     label: Entry,
 }
 
-/// Where a save goes: an existing directory, or a new one derived from the title.
 /// Open the editor for an existing profile stored in `dir`. New profiles are
 /// created via the wizard ([`crate::ui::wizard`]); the editor only edits.
 pub fn open_for_edit(
@@ -166,11 +111,12 @@ pub fn open_for_edit(
     notebook.append_page(&general.0, Some(&Label::new(Some("General"))));
     let run = build_run(&profile, &window);
     notebook.append_page(&run.0, Some(&Label::new(Some("Mounts & Run"))));
-    let (cpu_page, graphics_page, sound_page, advanced_page, dos) = build_dos_tabs(&profile);
-    notebook.append_page(&cpu_page, Some(&Label::new(Some("CPU"))));
-    notebook.append_page(&graphics_page, Some(&Label::new(Some("Graphics"))));
-    notebook.append_page(&sound_page, Some(&Label::new(Some("Sound"))));
-    let advanced_index = notebook.append_page(&advanced_page, Some(&Label::new(Some("Advanced"))));
+    let dos = DosboxForm::new(&profile.dosbox, INHERIT);
+    notebook.append_page(&dos.cpu_page, Some(&Label::new(Some("CPU"))));
+    notebook.append_page(&dos.graphics_page, Some(&Label::new(Some("Graphics"))));
+    notebook.append_page(&dos.sound_page, Some(&Label::new(Some("Sound"))));
+    let advanced_index =
+        notebook.append_page(&dos.advanced_page, Some(&Label::new(Some("Advanced"))));
 
     let fields = Rc::new(Fields {
         general: general.1,
@@ -179,18 +125,15 @@ pub fn open_for_edit(
     });
     let original = Rc::new(profile);
 
-    // Refresh the read-only conf preview whenever the Advanced tab is shown.
+    // Refresh the read-only preview (the effective, merged conf) on Advanced.
     {
         let fields = fields.clone();
         let original = original.clone();
         notebook.connect_switch_page(move |_, _, index| {
             if index == advanced_index {
                 let p = collect(&fields, &original);
-                fields
-                    .dos
-                    .preview
-                    .buffer()
-                    .set_text(&p.dosbox.render(&p.run));
+                let effective = crate::config::defaults::load().merge(&p.dosbox);
+                fields.dos.set_preview(&effective.render(&p.run));
             }
         });
     }
@@ -469,179 +412,6 @@ fn pick_path(window: &WeakRef<Window>, entry: &Entry, kind: &DropDown) {
     }
 }
 
-/// Build the CPU / Graphics / Sound / Advanced tabs and their widget group.
-/// Returns the four pages in tab order plus the [`Dos`] widgets.
-fn build_dos_tabs(profile: &Profile) -> (GtkBox, GtkBox, GtkBox, GtkBox, Dos) {
-    let d = &profile.dosbox;
-
-    let cpu_page = widgets::page();
-    let (row, core) = config_row("Core", &CORE_OPTS, d.core.as_deref());
-    cpu_page.append(&row);
-    let (row, cputype) = config_row("CPU type", &CPUTYPE_OPTS, d.cputype.as_deref());
-    cpu_page.append(&row);
-    let (row, cycles) = config_row("Cycles", &CYCLES_OPTS, d.cycles.as_deref());
-    cpu_page.append(&row);
-
-    let graphics_page = widgets::page();
-    let (row, output) = config_row("Output", &OUTPUT_OPTS, d.output.as_deref());
-    graphics_page.append(&row);
-    let (row, machine) = config_row("Machine", &MACHINE_OPTS, d.machine.as_deref());
-    graphics_page.append(&row);
-    let memsize_cur = d.memsize.map(|v| v.to_string());
-    let (row, memsize) = config_row("Memory (MB)", &MEMSIZE_OPTS, memsize_cur.as_deref());
-    graphics_page.append(&row);
-    let (row, scaler) = config_row("Scaler", &SCALER_OPTS, d.scaler.as_deref());
-    graphics_page.append(&row);
-    let aspect_cur = d.aspect.map(|b| if b { "on" } else { "off" });
-    let (row, aspect) = config_row("Aspect correction", &ASPECT_OPTS, aspect_cur);
-    graphics_page.append(&row);
-
-    let sound_page = widgets::page();
-    let (row, sbtype) = config_row("Sound Blaster", &SBTYPE_OPTS, d.sbtype.as_deref());
-    sound_page.append(&row);
-    let rate_cur = d.rate.map(|v| v.to_string());
-    let (row, rate) = config_row("Mixer rate (Hz)", &RATE_OPTS, rate_cur.as_deref());
-    sound_page.append(&row);
-
-    let advanced_page = widgets::page();
-    advanced_page.append(
-        &Label::builder()
-            .label("Advanced keys — one per line, e.g. cpu.cycleup = 500")
-            .halign(gtk::Align::Start)
-            .build(),
-    );
-    let passthrough = TextView::new();
-    passthrough.set_monospace(true);
-    passthrough
-        .buffer()
-        .set_text(&serialize_passthrough(&d.passthrough));
-    advanced_page.append(
-        &ScrolledWindow::builder()
-            .child(&passthrough)
-            .min_content_height(120)
-            .vexpand(true)
-            .build(),
-    );
-    advanced_page.append(
-        &Label::builder()
-            .label("Generated dosbox.conf preview")
-            .halign(gtk::Align::Start)
-            .build(),
-    );
-    let preview = TextView::builder().editable(false).monospace(true).build();
-    advanced_page.append(
-        &ScrolledWindow::builder()
-            .child(&preview)
-            .min_content_height(150)
-            .vexpand(true)
-            .build(),
-    );
-
-    let dos = Dos {
-        output,
-        machine,
-        memsize,
-        scaler,
-        aspect,
-        core,
-        cputype,
-        cycles,
-        sbtype,
-        rate,
-        passthrough,
-        preview,
-    };
-    (cpu_page, graphics_page, sound_page, advanced_page, dos)
-}
-
-/// A config dropdown row: curated `base` options, plus the profile's current
-/// value if it isn't already listed (so custom values survive a round-trip).
-fn config_row(label: &str, base: &[&str], current: Option<&str>) -> (GtkBox, DropDown) {
-    let current = current.filter(|c| !c.is_empty());
-    let mut opts: Vec<&str> = base.to_vec();
-    if let Some(c) = current {
-        if !opts.contains(&c) {
-            opts.insert(1, c); // right after "(default)"
-        }
-    }
-    widgets::dropdown_row(label, &opts, Some(current.unwrap_or(DEFAULT)))
-}
-
-/// Read the DOSBox tabs into a [`DosboxConfig`].
-fn collect_dosbox(dos: &Dos) -> DosboxConfig {
-    DosboxConfig {
-        output: cfg_opt(&dos.output),
-        machine: cfg_opt(&dos.machine),
-        memsize: cfg_opt(&dos.memsize).and_then(|s| s.parse().ok()),
-        core: cfg_opt(&dos.core),
-        cputype: cfg_opt(&dos.cputype),
-        cycles: cfg_opt(&dos.cycles),
-        aspect: cfg_bool(&dos.aspect),
-        scaler: cfg_opt(&dos.scaler),
-        sbtype: cfg_opt(&dos.sbtype),
-        rate: cfg_opt(&dos.rate).and_then(|s| s.parse().ok()),
-        passthrough: parse_passthrough(&textview_text(&dos.passthrough)),
-    }
-}
-
-/// Selected dropdown text, treating the `(default)` sentinel as `None`.
-fn cfg_opt(dd: &DropDown) -> Option<String> {
-    match widgets::dropdown_selected(dd) {
-        Some(s) if s != DEFAULT => Some(s),
-        _ => None,
-    }
-}
-
-/// `on`/`off` dropdown -> `Option<bool>` (`(default)` -> `None`).
-fn cfg_bool(dd: &DropDown) -> Option<bool> {
-    match widgets::dropdown_selected(dd).as_deref() {
-        Some("on") => Some(true),
-        Some("off") => Some(false),
-        _ => None,
-    }
-}
-
-/// Parse "section.key = value" lines into the passthrough map. Blank lines and
-/// `#` comments are ignored; malformed lines are skipped.
-fn parse_passthrough(text: &str) -> IndexMap<String, IndexMap<String, String>> {
-    let mut map: IndexMap<String, IndexMap<String, String>> = IndexMap::new();
-    for line in text.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        let Some((lhs, value)) = line.split_once('=') else {
-            continue;
-        };
-        let Some((section, key)) = lhs.trim().split_once('.') else {
-            continue;
-        };
-        map.entry(section.trim().to_string())
-            .or_default()
-            .insert(key.trim().to_string(), value.trim().to_string());
-    }
-    map
-}
-
-/// Inverse of [`parse_passthrough`]: render the map back to editable lines.
-fn serialize_passthrough(map: &IndexMap<String, IndexMap<String, String>>) -> String {
-    let mut out = String::new();
-    for (section, keys) in map {
-        for (key, value) in keys {
-            out.push_str(&format!("{section}.{key} = {value}\n"));
-        }
-    }
-    out
-}
-
-/// Whole-buffer text of a `TextView`.
-fn textview_text(view: &TextView) -> String {
-    let buffer = view.buffer();
-    buffer
-        .text(&buffer.start_iter(), &buffer.end_iter(), false)
-        .to_string()
-}
-
 /// Read the editor widgets into a profile, preserving fields no tab edits.
 fn collect(fields: &Fields, original: &Profile) -> Profile {
     let mut p = original.clone();
@@ -657,7 +427,7 @@ fn collect(fields: &Fields, original: &Profile) -> Profile {
     p.developer = none_if_empty(&g.developer.text());
     p.publisher = none_if_empty(&g.publisher.text());
     p.www = none_if_empty(&g.www.text());
-    p.notes = none_if_empty(&textview_text(&g.notes));
+    p.notes = none_if_empty(&widgets::textview_text(&g.notes));
 
     // Mounts & Run
     let r = &fields.run;
@@ -669,7 +439,7 @@ fn collect(fields: &Fields, original: &Profile) -> Profile {
         mounts: collect_mounts(&r.mounts.borrow()),
     };
 
-    p.dosbox = collect_dosbox(&fields.dos);
+    p.dosbox = fields.dos.collect();
 
     p
 }
@@ -710,14 +480,14 @@ fn register_editor_actions(
     save: &Button,
     cancel: &Button,
 ) {
-    let save_action = gtk::gio::SimpleAction::new("editor-save", None);
+    let save_action = gio::SimpleAction::new("editor-save", None);
     {
         let save = save.clone();
         save_action.connect_activate(move |_, _| save.emit_clicked());
     }
     app.add_action(&save_action);
 
-    let cancel_action = gtk::gio::SimpleAction::new("editor-cancel", None);
+    let cancel_action = gio::SimpleAction::new("editor-cancel", None);
     {
         let cancel = cancel.clone();
         cancel_action.connect_activate(move |_, _| cancel.emit_clicked());
@@ -751,26 +521,5 @@ fn none_if_empty(text: &str) -> Option<String> {
         None
     } else {
         Some(trimmed.to_string())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn passthrough_round_trips() {
-        let text = "cpu.cycleup = 500\nrender.glshader = crt\n";
-        let map = parse_passthrough(text);
-        assert_eq!(map["cpu"]["cycleup"], "500");
-        assert_eq!(map["render"]["glshader"], "crt");
-        assert_eq!(serialize_passthrough(&map), text);
-    }
-
-    #[test]
-    fn passthrough_skips_blank_and_malformed_lines() {
-        let map = parse_passthrough("\n# comment\nnonsense\ncpu.core = dynamic\n");
-        assert_eq!(map.len(), 1);
-        assert_eq!(map["cpu"]["core"], "dynamic");
     }
 }
