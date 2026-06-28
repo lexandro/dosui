@@ -157,6 +157,7 @@ fn build_menubar() -> PopoverMenuBar {
     profile.append(Some("Run"), Some("app.play"));
     profile.append(Some("Edit"), Some("app.edit"));
     profile.append(Some("Duplicate"), Some("app.duplicate"));
+    profile.append(Some("Toggle favorite"), Some("app.favorite"));
     profile.append(Some("Delete"), Some("app.delete"));
     profile.append(Some("Open folder"), Some("app.open-folder"));
 
@@ -268,7 +269,7 @@ fn build_factory() -> SignalListItemFactory {
         };
         let entry = obj.borrow::<Entry>();
         let (dir, profile) = &*entry;
-        title.set_text(&profile.title);
+        title.set_text(&display_title(profile));
         match cover_path(dir, profile) {
             Some(p) if p.exists() => cover.set_filename(p.to_str()),
             _ => cover.set_filename(None::<&str>),
@@ -404,6 +405,23 @@ fn install_actions(
     }
     app.add_action(&open_folder);
 
+    let favorite = gio::SimpleAction::new("favorite", None);
+    {
+        let selection = selection.clone();
+        let reload = reload.clone();
+        favorite.connect_activate(move |_, _| {
+            let Some((dir, mut prof)) = selected_entry(&selection) else {
+                return;
+            };
+            prof.favorite = !prof.favorite;
+            if let Err(e) = prof.save(&dir) {
+                log::error!("toggling favorite failed: {e:#}");
+            }
+            reload();
+        });
+    }
+    app.add_action(&favorite);
+
     let about = gio::SimpleAction::new("about", None);
     {
         let window = window.downgrade();
@@ -428,7 +446,7 @@ fn install_actions(
     app.add_action(&quit);
 
     // Disable selection-dependent commands when nothing is selected.
-    let dependent = vec![play, edit, duplicate, delete, open_folder];
+    let dependent = vec![play, edit, duplicate, delete, open_folder, favorite];
     let update_enabled = {
         let selection = selection.clone();
         move || {
@@ -646,7 +664,7 @@ fn build_detail() -> Detail {
 
 /// Fill the detail pane from a profile and enable Play/Edit.
 fn show_profile(detail: &Detail, dir: &Path, profile: &Profile) {
-    detail.title.set_text(&profile.title);
+    detail.title.set_text(&display_title(profile));
     detail.meta.set_text(&meta_line(profile));
     detail
         .notes
@@ -701,6 +719,15 @@ fn last_played_line(profile: &Profile) -> String {
             profile::humanize_since(profile::now_unix(), then)
         ),
         None => "Never played".to_string(),
+    }
+}
+
+/// Title with a leading star for favorites.
+fn display_title(profile: &Profile) -> String {
+    if profile.favorite {
+        format!("★ {}", profile.title)
+    } else {
+        profile.title.clone()
     }
 }
 
