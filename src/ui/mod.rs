@@ -15,3 +15,4 @@ pub mod profile_editor;
 pub mod settings_dialog;
 pub mod widgets;
 pub mod wizard;
+pub mod wizard_pages;
