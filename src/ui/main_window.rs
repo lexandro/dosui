@@ -1,24 +1,29 @@
 //! The main application window: profile list (left) + detail/Play (right).
 //!
-//! M1 is a two-pane MVP: pick a profile, hit Play, DOSBox runs. The category
-//! sidebar and cover grid arrive in later milestones (plan §2.5).
+//! Two-pane shell for now: pick a profile, Play, or Edit/create profiles. The
+//! category sidebar and cover grid arrive in later milestones (plan §2.5).
 
+use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::{
-    AlertDialog, Application, ApplicationWindow, Box as GtkBox, Button, HeaderBar, Label, ListBox,
-    Orientation, Paned, ScrolledWindow, SearchEntry, SelectionMode,
+    gio, AlertDialog, Application, ApplicationWindow, Box as GtkBox, Button, HeaderBar, Label,
+    ListBox, Orientation, Paned, ScrolledWindow, SearchEntry, SelectionMode,
 };
 
 use crate::app::APP_NAME;
 use crate::config::profile::{self, Profile};
 use crate::config::settings::AppSettings;
 use crate::launcher;
+use crate::ui::profile_editor;
 
 /// Loaded profile together with its on-disk directory (needed to launch).
 type Entry = (PathBuf, Profile);
+
+/// Shared, reloadable profile list backing the ListBox rows by index.
+type Profiles = Rc<RefCell<Vec<Entry>>>;
 
 /// Widgets in the detail pane whose text changes with the selection.
 #[derive(Clone)]
@@ -32,7 +37,7 @@ struct Detail {
 }
 
 pub fn build(app: &Application) {
-    let profiles: Rc<Vec<Entry>> = Rc::new(load_profiles());
+    let profiles: Profiles = Rc::new(RefCell::new(load_profiles()));
     let settings = Rc::new(AppSettings::load());
 
     let window = ApplicationWindow::builder()
@@ -41,13 +46,12 @@ pub fn build(app: &Application) {
         .default_width(900)
         .default_height(580)
         .build();
-    window.set_titlebar(Some(&build_header()));
+    let header = build_header();
+    window.set_titlebar(Some(&header.bar));
 
     let list = ListBox::new();
     list.set_selection_mode(SelectionMode::Single);
-    for (_, profile) in profiles.iter() {
-        list.append(&profile_row(profile));
-    }
+    populate(&list, &profiles.borrow());
     let list_scroller = ScrolledWindow::builder()
         .child(&list)
         .width_request(260)
@@ -55,13 +59,16 @@ pub fn build(app: &Application) {
 
     let detail = build_detail();
 
+    // Reloads the list from disk and reselects the first row (used after edits).
+    let reload = make_reload(&list, &profiles, &detail);
+
     // Selection -> refresh the detail pane.
     {
         let profiles = profiles.clone();
         let detail = detail.clone();
         list.connect_row_selected(move |_, row| match row {
             Some(row) => {
-                if let Some((_, profile)) = profiles.get(row.index() as usize) {
+                if let Some((_, profile)) = profiles.borrow().get(row.index() as usize) {
                     show_profile(&detail, profile);
                 }
             }
@@ -69,61 +76,22 @@ pub fn build(app: &Application) {
         });
     }
 
-    // Play button -> launch the selected profile.
-    {
-        let profiles = profiles.clone();
-        let settings = settings.clone();
-        let window = window.downgrade(); // weak: avoid window<->closure cycle
-        let list = list.clone();
-        detail.play.connect_clicked(move |_| {
-            if let Some(row) = list.selected_row() {
-                launch_entry(&profiles, &settings, window.upgrade(), row.index() as usize);
-            }
-        });
-    }
+    // Every button maps to a GAction. This keeps one source of truth for each
+    // command, gives keyboard accelerators, and — crucially — makes the app
+    // driveable from outside (e.g. `gapplication action io.github.dosui play`)
+    // so behaviour can be tested without hunting for on-screen pixels.
+    install_actions(app, &window, &list, &profiles, &settings, &reload);
+    detail.play.set_action_name(Some("app.play"));
+    detail.edit.set_action_name(Some("app.edit"));
+    header.new_profile.set_action_name(Some("app.new"));
 
-    // Double-click / Enter on a row -> launch it too (D-Fend behaviour).
-    {
-        let profiles = profiles.clone();
-        let settings = settings.clone();
-        let window = window.downgrade();
-        list.connect_row_activated(move |_, row| {
-            launch_entry(&profiles, &settings, window.upgrade(), row.index() as usize);
-        });
-    }
-
-    // Edit -> open the profile editor for the selected profile.
-    {
-        let profiles = profiles.clone();
-        let window = window.downgrade();
-        let list = list.clone();
-        detail.edit.connect_clicked(move |_| {
-            let Some(row) = list.selected_row() else {
-                return;
-            };
-            let Some((dir, profile)) = profiles.get(row.index() as usize) else {
-                return;
-            };
-            let Some(window) = window.upgrade() else {
-                return;
-            };
-            // M2.5 will swap this for a real list refresh.
-            let on_saved: Rc<dyn Fn()> =
-                Rc::new(|| log::info!("profile saved (restart to see list changes)"));
-            crate::ui::profile_editor::open_for_edit(
-                &window,
-                dir.clone(),
-                profile.clone(),
-                on_saved,
-            );
-        });
-    }
+    // Double-click / Enter on a row -> Play (D-Fend behaviour).
+    list.connect_row_activated(|list, _| {
+        let _ = WidgetExt::activate_action(list, "app.play", None);
+    });
 
     // Pre-select the first profile so the detail pane is populated on start.
-    if let Some(first) = list.row_at_index(0) {
-        list.select_row(Some(&first));
-        first.grab_focus();
-    }
+    select_first(&list, &detail);
 
     let root = Paned::builder()
         .orientation(Orientation::Horizontal)
@@ -134,6 +102,112 @@ pub fn build(app: &Application) {
     window.set_child(Some(&root));
 
     window.present();
+}
+
+/// Register the `play` / `edit` / `new` app actions and their accelerators.
+/// Buttons and the row-activated gesture all route through these, so there is a
+/// single implementation per command and it can be triggered externally.
+fn install_actions(
+    app: &Application,
+    window: &ApplicationWindow,
+    list: &ListBox,
+    profiles: &Profiles,
+    settings: &Rc<AppSettings>,
+    reload: &Rc<dyn Fn()>,
+) {
+    let play = gio::SimpleAction::new("play", None);
+    {
+        let profiles = profiles.clone();
+        let settings = settings.clone();
+        let window = window.downgrade();
+        let list = list.clone();
+        play.connect_activate(move |_, _| {
+            if let Some(row) = list.selected_row() {
+                launch_entry(
+                    &profiles.borrow(),
+                    &settings,
+                    window.upgrade(),
+                    row.index() as usize,
+                );
+            }
+        });
+    }
+    app.add_action(&play);
+
+    let edit = gio::SimpleAction::new("edit", None);
+    {
+        let profiles = profiles.clone();
+        let window = window.downgrade();
+        let list = list.clone();
+        let reload = reload.clone();
+        edit.connect_activate(move |_, _| {
+            let Some(row) = list.selected_row() else {
+                return;
+            };
+            let (dir, prof) = match profiles.borrow().get(row.index() as usize) {
+                Some((dir, prof)) => (dir.clone(), prof.clone()),
+                None => return,
+            };
+            if let Some(window) = window.upgrade() {
+                profile_editor::open_for_edit(&window, dir, prof, reload.clone());
+            }
+        });
+    }
+    app.add_action(&edit);
+
+    let new = gio::SimpleAction::new("new", None);
+    {
+        let window = window.downgrade();
+        let reload = reload.clone();
+        new.connect_activate(move |_, _| {
+            if let Some(window) = window.upgrade() {
+                profile_editor::open_for_new(&window, reload.clone());
+            }
+        });
+    }
+    app.add_action(&new);
+
+    app.set_accels_for_action("app.play", &["<Ctrl>p"]);
+    app.set_accels_for_action("app.edit", &["<Ctrl>e"]);
+    app.set_accels_for_action("app.new", &["<Ctrl>n"]);
+}
+
+/// Build a callback that rescans profiles and rebuilds the list.
+fn make_reload(list: &ListBox, profiles: &Profiles, detail: &Detail) -> Rc<dyn Fn()> {
+    let list = list.clone();
+    let profiles = profiles.clone();
+    let detail = detail.clone();
+    Rc::new(move || {
+        *profiles.borrow_mut() = load_profiles();
+        clear_list(&list);
+        populate(&list, &profiles.borrow());
+        select_first(&list, &detail);
+    })
+}
+
+/// Append a row per profile.
+fn populate(list: &ListBox, profiles: &[Entry]) {
+    for (_, profile) in profiles {
+        list.append(&profile_row(profile));
+    }
+}
+
+/// Remove all rows from the list.
+fn clear_list(list: &ListBox) {
+    while let Some(row) = list.row_at_index(0) {
+        list.remove(&row);
+    }
+}
+
+/// Select the first row (populating the detail pane), or clear it if empty.
+fn select_first(list: &ListBox, detail: &Detail) {
+    match list.row_at_index(0) {
+        Some(first) => {
+            list.select_row(Some(&first));
+            first.grab_focus();
+        }
+        None => clear_detail(detail),
+    }
 }
 
 /// Launch the profile at `index`, reporting failures in a dialog.
@@ -170,26 +244,31 @@ fn load_profiles() -> Vec<Entry> {
     }
 }
 
-fn build_header() -> HeaderBar {
-    let header = HeaderBar::new();
-    header.pack_start(
-        &Button::builder()
-            .icon_name("list-add-symbolic")
-            .tooltip_text("New profile (M3)")
-            .build(),
-    );
-    header.pack_end(
+/// Header bar plus the buttons the window wires up.
+struct Header {
+    bar: HeaderBar,
+    new_profile: Button,
+}
+
+fn build_header() -> Header {
+    let bar = HeaderBar::new();
+    let new_profile = Button::builder()
+        .icon_name("list-add-symbolic")
+        .tooltip_text("New profile")
+        .build();
+    bar.pack_start(&new_profile);
+    bar.pack_end(
         &Button::builder()
             .icon_name("emblem-system-symbolic")
             .tooltip_text("Settings (M4)")
             .build(),
     );
-    header.set_title_widget(Some(
+    bar.set_title_widget(Some(
         &SearchEntry::builder()
             .placeholder_text("Search profiles…")
             .build(),
     ));
-    header
+    Header { bar, new_profile }
 }
 
 /// One list row: the profile title.
@@ -257,7 +336,7 @@ fn build_detail() -> Detail {
     detail
 }
 
-/// Fill the detail pane from a profile and enable Play.
+/// Fill the detail pane from a profile and enable Play/Edit.
 fn show_profile(detail: &Detail, profile: &Profile) {
     detail.title.set_text(&profile.title);
     detail.meta.set_text(&meta_line(profile));

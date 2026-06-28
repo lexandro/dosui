@@ -19,6 +19,7 @@ use gtk::{
 use indexmap::IndexMap;
 
 use crate::config::dosbox_conf::DosboxConfig;
+use crate::config::paths;
 use crate::config::profile::{Mount, MountKind, Profile, RunSpec};
 use crate::ui::widgets;
 
@@ -142,6 +143,12 @@ struct MountRow {
     label: Entry,
 }
 
+/// Where a save goes: an existing directory, or a new one derived from the title.
+enum Target {
+    Existing(PathBuf),
+    New,
+}
+
 /// Open the editor for an existing profile stored in `dir`.
 pub fn open_for_edit(
     parent: &ApplicationWindow,
@@ -149,10 +156,24 @@ pub fn open_for_edit(
     profile: Profile,
     on_saved: Rc<dyn Fn()>,
 ) {
+    open(parent, profile, Target::Existing(dir), on_saved);
+}
+
+/// Open the editor for a brand-new profile. The directory/id is derived from the
+/// title on Save.
+pub fn open_for_new(parent: &ApplicationWindow, on_saved: Rc<dyn Fn()>) {
+    open(parent, default_profile(), Target::New, on_saved);
+}
+
+fn open(parent: &ApplicationWindow, profile: Profile, target: Target, on_saved: Rc<dyn Fn()>) {
+    let title = match target {
+        Target::Existing(_) => format!("Edit — {}", profile.title),
+        Target::New => "New profile".to_string(),
+    };
     let window = Window::builder()
         .transient_for(parent)
         .modal(true)
-        .title(format!("Edit — {}", profile.title))
+        .title(title)
         .default_width(620)
         .default_height(560)
         .build();
@@ -198,6 +219,13 @@ pub fn open_for_edit(
     outer.append(&notebook);
     outer.append(&actions.container);
     window.set_child(Some(&outer));
+    window.set_default_widget(Some(&actions.save)); // Enter confirms
+
+    // Expose the editor's Save/Cancel as app actions while it is open, so the
+    // whole flow is driveable from outside (e.g. `gapplication action … editor-save`).
+    if let Some(app) = parent.application() {
+        register_editor_actions(&app, &window, &actions.save, &actions.cancel);
+    }
 
     {
         let window = window.clone();
@@ -206,7 +234,15 @@ pub fn open_for_edit(
     {
         let window = window.clone();
         actions.save.connect_clicked(move |_| {
-            let updated = collect(&fields, &original);
+            let mut updated = collect(&fields, &original);
+            let dir = match resolve_dir(&target, &mut updated) {
+                Ok(dir) => dir,
+                Err(e) => {
+                    log::error!("resolving save dir failed: {e:#}");
+                    show_error(&window, "Could not determine where to save", &e);
+                    return;
+                }
+            };
             match updated.save(&dir) {
                 Ok(()) => {
                     on_saved();
@@ -214,11 +250,7 @@ pub fn open_for_edit(
                 }
                 Err(e) => {
                     log::error!("saving profile failed: {e:#}");
-                    AlertDialog::builder()
-                        .message("Could not save profile")
-                        .detail(format!("{e:#}"))
-                        .build()
-                        .show(Some(&window));
+                    show_error(&window, "Could not save profile", &e);
                 }
             }
         });
@@ -696,6 +728,108 @@ fn split_args(text: &str) -> Vec<String> {
     text.split_whitespace().map(str::to_string).collect()
 }
 
+/// Resolve the directory to save into. For a new profile, derive a unique
+/// slug from the (possibly just-edited) title and set it as the profile id.
+fn resolve_dir(target: &Target, profile: &mut Profile) -> anyhow::Result<PathBuf> {
+    match target {
+        Target::Existing(dir) => Ok(dir.clone()),
+        Target::New => {
+            let root = paths::profiles_dir()?;
+            let base = slugify(&profile.title);
+            let mut id = base.clone();
+            let mut n = 2;
+            while root.join(&id).exists() {
+                id = format!("{base}-{n}");
+                n += 1;
+            }
+            profile.id = id.clone();
+            Ok(root.join(id))
+        }
+    }
+}
+
+/// A filesystem-safe lowercase slug; falls back to "profile" when empty.
+fn slugify(title: &str) -> String {
+    let slug = title
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    if slug.is_empty() {
+        "profile".to_string()
+    } else {
+        slug
+    }
+}
+
+/// A blank profile for the "New" flow.
+fn default_profile() -> Profile {
+    Profile {
+        id: String::new(),
+        title: "New profile".to_string(),
+        genre: None,
+        year: None,
+        developer: None,
+        publisher: None,
+        www: None,
+        notes: None,
+        cover: None,
+        favorite: false,
+        run: RunSpec {
+            mounts: Vec::new(),
+            working_drive: 'C',
+            command: String::new(),
+            args: Vec::new(),
+            exit_after: true,
+        },
+        dosbox: DosboxConfig::default(),
+    }
+}
+
+/// Register temporary `editor-save` / `editor-cancel` app actions that click the
+/// editor's buttons, removed when the editor closes. Editors are modal, so only
+/// one set is active at a time.
+fn register_editor_actions(
+    app: &gtk::Application,
+    window: &Window,
+    save: &Button,
+    cancel: &Button,
+) {
+    let save_action = gtk::gio::SimpleAction::new("editor-save", None);
+    {
+        let save = save.clone();
+        save_action.connect_activate(move |_, _| save.emit_clicked());
+    }
+    app.add_action(&save_action);
+
+    let cancel_action = gtk::gio::SimpleAction::new("editor-cancel", None);
+    {
+        let cancel = cancel.clone();
+        cancel_action.connect_activate(move |_, _| cancel.emit_clicked());
+    }
+    app.add_action(&cancel_action);
+
+    let app = app.clone();
+    window.connect_close_request(move |_| {
+        app.remove_action("editor-save");
+        app.remove_action("editor-cancel");
+        gtk::glib::Propagation::Proceed
+    });
+}
+
+/// Show an error in a modal alert tied to the editor window.
+fn show_error(window: &Window, message: &str, error: &anyhow::Error) {
+    AlertDialog::builder()
+        .message(message.to_string())
+        .detail(format!("{error:#}"))
+        .build()
+        .show(Some(window));
+}
+
 fn opt(value: &Option<String>) -> &str {
     value.as_deref().unwrap_or("")
 }
@@ -706,5 +840,39 @@ fn none_if_empty(text: &str) -> Option<String> {
         None
     } else {
         Some(trimmed.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn slugify_normalizes_titles() {
+        assert_eq!(slugify("Dune II"), "dune-ii");
+        assert_eq!(slugify("  Commander Keen 4!  "), "commander-keen-4");
+        assert_eq!(slugify("X-COM: UFO Defense"), "x-com-ufo-defense");
+    }
+
+    #[test]
+    fn slugify_falls_back_when_empty() {
+        assert_eq!(slugify(""), "profile");
+        assert_eq!(slugify("***"), "profile");
+    }
+
+    #[test]
+    fn passthrough_round_trips() {
+        let text = "cpu.cycleup = 500\nrender.glshader = crt\n";
+        let map = parse_passthrough(text);
+        assert_eq!(map["cpu"]["cycleup"], "500");
+        assert_eq!(map["render"]["glshader"], "crt");
+        assert_eq!(serialize_passthrough(&map), text);
+    }
+
+    #[test]
+    fn passthrough_skips_blank_and_malformed_lines() {
+        let map = parse_passthrough("\n# comment\nnonsense\ncpu.core = dynamic\n");
+        assert_eq!(map.len(), 1);
+        assert_eq!(map["cpu"]["core"], "dynamic");
     }
 }
