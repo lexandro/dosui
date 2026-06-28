@@ -95,7 +95,12 @@ pub fn dropdown_row(label: &str, options: &[&str], selected: Option<&str>) -> (G
     (labeled(label, &dd), dd)
 }
 
-/// The currently selected option text (`None` if the model is empty).
-pub fn dropdown_text(dd: &DropDown, options: &[&str]) -> Option<String> {
-    options.get(dd.selected() as usize).map(|s| s.to_string())
+/// The currently selected option's text (`None` if nothing is selected).
+///
+/// Reads the selected `StringObject` directly, so callers don't need to keep
+/// the original options slice around for read-back.
+pub fn dropdown_selected(dd: &DropDown) -> Option<String> {
+    dd.selected_item()
+        .and_downcast::<gtk::StringObject>()
+        .map(|s| s.string().to_string())
 }

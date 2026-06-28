@@ -16,9 +16,51 @@ use gtk::{
     AlertDialog, ApplicationWindow, Box as GtkBox, Button, CheckButton, DropDown, Entry,
     FileDialog, Label, Notebook, Orientation, ScrolledWindow, TextView, Window,
 };
+use indexmap::IndexMap;
 
+use crate::config::dosbox_conf::DosboxConfig;
 use crate::config::profile::{Mount, MountKind, Profile, RunSpec};
 use crate::ui::widgets;
+
+/// Sentinel first option meaning "don't set this key — use the DOSBox default".
+const DEFAULT: &str = "(default)";
+
+// Curated option lists for the DOSBox tabs. The profile's current value is added
+// dynamically if it isn't in the list, so arbitrary values are never lost.
+const OUTPUT_OPTS: [&str; 4] = [DEFAULT, "texture", "texturenb", "opengl"];
+const MACHINE_OPTS: [&str; 8] = [
+    DEFAULT,
+    "svga_s3",
+    "svga_et4000",
+    "vesa_nolfb",
+    "vgaonly",
+    "ega",
+    "cga",
+    "hercules",
+];
+const MEMSIZE_OPTS: [&str; 7] = [DEFAULT, "1", "4", "8", "16", "32", "64"];
+const CORE_OPTS: [&str; 5] = [DEFAULT, "auto", "normal", "dynamic", "simple"];
+const CPUTYPE_OPTS: [&str; 6] = [
+    DEFAULT,
+    "auto",
+    "386",
+    "386_slow",
+    "486_slow",
+    "pentium_slow",
+];
+const CYCLES_OPTS: [&str; 7] = [
+    DEFAULT,
+    "auto",
+    "max",
+    "fixed 3000",
+    "fixed 10000",
+    "fixed 20000",
+    "fixed 30000",
+];
+const SCALER_OPTS: [&str; 4] = [DEFAULT, "none", "normal2x", "normal3x"];
+const ASPECT_OPTS: [&str; 3] = [DEFAULT, "on", "off"];
+const SBTYPE_OPTS: [&str; 6] = [DEFAULT, "sb16", "sbpro2", "sb2", "gb", "none"];
+const RATE_OPTS: [&str; 6] = [DEFAULT, "22050", "32000", "44100", "48000", "49716"];
 
 /// Drive-letter options (A–Z) shared by the working-drive and mount dropdowns.
 /// A static table so the `&str` refs are valid for both building and read-back.
@@ -54,6 +96,23 @@ fn text_to_kind(text: &str) -> MountKind {
 struct Fields {
     general: General,
     run: Run,
+    dos: Dos,
+}
+
+/// DOSBox config widgets (CPU / Graphics / Sound) + Advanced passthrough/preview.
+struct Dos {
+    output: DropDown,
+    machine: DropDown,
+    memsize: DropDown,
+    scaler: DropDown,
+    aspect: DropDown,
+    core: DropDown,
+    cputype: DropDown,
+    cycles: DropDown,
+    sbtype: DropDown,
+    rate: DropDown,
+    passthrough: TextView,
+    preview: TextView,
 }
 
 struct General {
@@ -105,11 +164,34 @@ pub fn open_for_edit(
     notebook.append_page(&general.0, Some(&Label::new(Some("General"))));
     let run = build_run(&profile, &window);
     notebook.append_page(&run.0, Some(&Label::new(Some("Mounts & Run"))));
+    let (cpu_page, graphics_page, sound_page, advanced_page, dos) = build_dos_tabs(&profile);
+    notebook.append_page(&cpu_page, Some(&Label::new(Some("CPU"))));
+    notebook.append_page(&graphics_page, Some(&Label::new(Some("Graphics"))));
+    notebook.append_page(&sound_page, Some(&Label::new(Some("Sound"))));
+    let advanced_index = notebook.append_page(&advanced_page, Some(&Label::new(Some("Advanced"))));
 
-    let fields = Fields {
+    let fields = Rc::new(Fields {
         general: general.1,
         run: run.1,
-    };
+        dos,
+    });
+    let original = Rc::new(profile);
+
+    // Refresh the read-only conf preview whenever the Advanced tab is shown.
+    {
+        let fields = fields.clone();
+        let original = original.clone();
+        notebook.connect_switch_page(move |_, _, index| {
+            if index == advanced_index {
+                let p = collect(&fields, &original);
+                fields
+                    .dos
+                    .preview
+                    .buffer()
+                    .set_text(&p.dosbox.render(&p.run));
+            }
+        });
+    }
 
     let actions = action_bar();
     let outer = GtkBox::builder().orientation(Orientation::Vertical).build();
@@ -123,8 +205,6 @@ pub fn open_for_edit(
     }
     {
         let window = window.clone();
-        let fields = Rc::new(fields);
-        let original = profile;
         actions.save.connect_clicked(move |_| {
             let updated = collect(&fields, &original);
             match updated.save(&dir) {
@@ -368,7 +448,7 @@ fn pick_path(window: &WeakRef<Window>, entry: &Entry, kind: &DropDown) {
     let dialog = FileDialog::builder().title("Select mount path").build();
     let parent = window.upgrade();
     let entry = entry.clone();
-    let is_dir = widgets::dropdown_text(kind, &KIND_OPTIONS).as_deref() == Some("Directory");
+    let is_dir = widgets::dropdown_selected(kind).as_deref() == Some("Directory");
 
     let on_done = move |res: Result<gio::File, gtk::glib::Error>| {
         if let Ok(file) = res {
@@ -382,6 +462,179 @@ fn pick_path(window: &WeakRef<Window>, entry: &Entry, kind: &DropDown) {
     } else {
         dialog.open(parent.as_ref(), gio::Cancellable::NONE, on_done);
     }
+}
+
+/// Build the CPU / Graphics / Sound / Advanced tabs and their widget group.
+/// Returns the four pages in tab order plus the [`Dos`] widgets.
+fn build_dos_tabs(profile: &Profile) -> (GtkBox, GtkBox, GtkBox, GtkBox, Dos) {
+    let d = &profile.dosbox;
+
+    let cpu_page = widgets::page();
+    let (row, core) = config_row("Core", &CORE_OPTS, d.core.as_deref());
+    cpu_page.append(&row);
+    let (row, cputype) = config_row("CPU type", &CPUTYPE_OPTS, d.cputype.as_deref());
+    cpu_page.append(&row);
+    let (row, cycles) = config_row("Cycles", &CYCLES_OPTS, d.cycles.as_deref());
+    cpu_page.append(&row);
+
+    let graphics_page = widgets::page();
+    let (row, output) = config_row("Output", &OUTPUT_OPTS, d.output.as_deref());
+    graphics_page.append(&row);
+    let (row, machine) = config_row("Machine", &MACHINE_OPTS, d.machine.as_deref());
+    graphics_page.append(&row);
+    let memsize_cur = d.memsize.map(|v| v.to_string());
+    let (row, memsize) = config_row("Memory (MB)", &MEMSIZE_OPTS, memsize_cur.as_deref());
+    graphics_page.append(&row);
+    let (row, scaler) = config_row("Scaler", &SCALER_OPTS, d.scaler.as_deref());
+    graphics_page.append(&row);
+    let aspect_cur = d.aspect.map(|b| if b { "on" } else { "off" });
+    let (row, aspect) = config_row("Aspect correction", &ASPECT_OPTS, aspect_cur);
+    graphics_page.append(&row);
+
+    let sound_page = widgets::page();
+    let (row, sbtype) = config_row("Sound Blaster", &SBTYPE_OPTS, d.sbtype.as_deref());
+    sound_page.append(&row);
+    let rate_cur = d.rate.map(|v| v.to_string());
+    let (row, rate) = config_row("Mixer rate (Hz)", &RATE_OPTS, rate_cur.as_deref());
+    sound_page.append(&row);
+
+    let advanced_page = widgets::page();
+    advanced_page.append(
+        &Label::builder()
+            .label("Advanced keys — one per line, e.g. cpu.cycleup = 500")
+            .halign(gtk::Align::Start)
+            .build(),
+    );
+    let passthrough = TextView::new();
+    passthrough.set_monospace(true);
+    passthrough
+        .buffer()
+        .set_text(&serialize_passthrough(&d.passthrough));
+    advanced_page.append(
+        &ScrolledWindow::builder()
+            .child(&passthrough)
+            .min_content_height(120)
+            .vexpand(true)
+            .build(),
+    );
+    advanced_page.append(
+        &Label::builder()
+            .label("Generated dosbox.conf preview")
+            .halign(gtk::Align::Start)
+            .build(),
+    );
+    let preview = TextView::builder().editable(false).monospace(true).build();
+    advanced_page.append(
+        &ScrolledWindow::builder()
+            .child(&preview)
+            .min_content_height(150)
+            .vexpand(true)
+            .build(),
+    );
+
+    let dos = Dos {
+        output,
+        machine,
+        memsize,
+        scaler,
+        aspect,
+        core,
+        cputype,
+        cycles,
+        sbtype,
+        rate,
+        passthrough,
+        preview,
+    };
+    (cpu_page, graphics_page, sound_page, advanced_page, dos)
+}
+
+/// A config dropdown row: curated `base` options, plus the profile's current
+/// value if it isn't already listed (so custom values survive a round-trip).
+fn config_row(label: &str, base: &[&str], current: Option<&str>) -> (GtkBox, DropDown) {
+    let current = current.filter(|c| !c.is_empty());
+    let mut opts: Vec<&str> = base.to_vec();
+    if let Some(c) = current {
+        if !opts.contains(&c) {
+            opts.insert(1, c); // right after "(default)"
+        }
+    }
+    widgets::dropdown_row(label, &opts, Some(current.unwrap_or(DEFAULT)))
+}
+
+/// Read the DOSBox tabs into a [`DosboxConfig`].
+fn collect_dosbox(dos: &Dos) -> DosboxConfig {
+    DosboxConfig {
+        output: cfg_opt(&dos.output),
+        machine: cfg_opt(&dos.machine),
+        memsize: cfg_opt(&dos.memsize).and_then(|s| s.parse().ok()),
+        core: cfg_opt(&dos.core),
+        cputype: cfg_opt(&dos.cputype),
+        cycles: cfg_opt(&dos.cycles),
+        aspect: cfg_bool(&dos.aspect),
+        scaler: cfg_opt(&dos.scaler),
+        sbtype: cfg_opt(&dos.sbtype),
+        rate: cfg_opt(&dos.rate).and_then(|s| s.parse().ok()),
+        passthrough: parse_passthrough(&textview_text(&dos.passthrough)),
+    }
+}
+
+/// Selected dropdown text, treating the `(default)` sentinel as `None`.
+fn cfg_opt(dd: &DropDown) -> Option<String> {
+    match widgets::dropdown_selected(dd) {
+        Some(s) if s != DEFAULT => Some(s),
+        _ => None,
+    }
+}
+
+/// `on`/`off` dropdown -> `Option<bool>` (`(default)` -> `None`).
+fn cfg_bool(dd: &DropDown) -> Option<bool> {
+    match widgets::dropdown_selected(dd).as_deref() {
+        Some("on") => Some(true),
+        Some("off") => Some(false),
+        _ => None,
+    }
+}
+
+/// Parse "section.key = value" lines into the passthrough map. Blank lines and
+/// `#` comments are ignored; malformed lines are skipped.
+fn parse_passthrough(text: &str) -> IndexMap<String, IndexMap<String, String>> {
+    let mut map: IndexMap<String, IndexMap<String, String>> = IndexMap::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some((lhs, value)) = line.split_once('=') else {
+            continue;
+        };
+        let Some((section, key)) = lhs.trim().split_once('.') else {
+            continue;
+        };
+        map.entry(section.trim().to_string())
+            .or_default()
+            .insert(key.trim().to_string(), value.trim().to_string());
+    }
+    map
+}
+
+/// Inverse of [`parse_passthrough`]: render the map back to editable lines.
+fn serialize_passthrough(map: &IndexMap<String, IndexMap<String, String>>) -> String {
+    let mut out = String::new();
+    for (section, keys) in map {
+        for (key, value) in keys {
+            out.push_str(&format!("{section}.{key} = {value}\n"));
+        }
+    }
+    out
+}
+
+/// Whole-buffer text of a `TextView`.
+fn textview_text(view: &TextView) -> String {
+    let buffer = view.buffer();
+    buffer
+        .text(&buffer.start_iter(), &buffer.end_iter(), false)
+        .to_string()
 }
 
 /// Read the editor widgets into a profile, preserving fields no tab edits.
@@ -399,24 +652,19 @@ fn collect(fields: &Fields, original: &Profile) -> Profile {
     p.developer = none_if_empty(&g.developer.text());
     p.publisher = none_if_empty(&g.publisher.text());
     p.www = none_if_empty(&g.www.text());
-    let buffer = g.notes.buffer();
-    let notes = buffer
-        .text(&buffer.start_iter(), &buffer.end_iter(), false)
-        .to_string();
-    p.notes = none_if_empty(&notes);
+    p.notes = none_if_empty(&textview_text(&g.notes));
 
     // Mounts & Run
     let r = &fields.run;
     p.run = RunSpec {
-        working_drive: first_char(
-            &widgets::dropdown_text(&r.working_drive, &drive_letters()),
-            'C',
-        ),
+        working_drive: first_char(&widgets::dropdown_selected(&r.working_drive), 'C'),
         command: r.command.text().trim().to_string(),
         args: split_args(&r.args.text()),
         exit_after: r.exit_after.is_active(),
         mounts: collect_mounts(&r.mounts.borrow()),
     };
+
+    p.dosbox = collect_dosbox(&fields.dos);
 
     p
 }
@@ -429,10 +677,8 @@ fn collect_mounts(rows: &[MountRow]) -> Vec<Mount> {
                 return None; // a mount with no path is meaningless; drop it
             }
             Some(Mount {
-                drive: first_char(&widgets::dropdown_text(&row.drive, &drive_letters()), 'C'),
-                kind: text_to_kind(
-                    &widgets::dropdown_text(&row.kind, &KIND_OPTIONS).unwrap_or_default(),
-                ),
+                drive: first_char(&widgets::dropdown_selected(&row.drive), 'C'),
+                kind: text_to_kind(&widgets::dropdown_selected(&row.kind).unwrap_or_default()),
                 path: PathBuf::from(path),
                 label: none_if_empty(&row.label.text()),
             })
