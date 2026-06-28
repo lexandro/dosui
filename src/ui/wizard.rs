@@ -84,6 +84,7 @@ pub fn open(parent: &ApplicationWindow, on_created: Rc<dyn Fn()>) {
         let back = back.clone();
         let next = next.clone();
         let idx = idx.clone();
+        let wiz = wiz.clone();
         Rc::new(move || {
             let i = idx.get();
             stack.set_visible_child_name(PAGES[i]);
@@ -93,9 +94,21 @@ pub fn open(parent: &ApplicationWindow, on_created: Rc<dyn Fn()>) {
             } else {
                 "Next"
             });
+            // Step 1 requires a folder; later steps are always proceedable.
+            let ready = PAGES[i] != "folder" || !wiz.folder.text().trim().is_empty();
+            next.set_sensitive(ready);
         })
     };
     refresh_nav();
+
+    window.set_default_widget(Some(&next)); // Enter advances / creates
+    wiz.folder.grab_focus();
+
+    // Re-evaluate the Next button as the folder is typed or picked.
+    {
+        let refresh_nav = refresh_nav.clone();
+        wiz.folder.connect_changed(move |_| refresh_nav());
+    }
 
     {
         let window = window.clone();
@@ -130,7 +143,60 @@ pub fn open(parent: &ApplicationWindow, on_created: Rc<dyn Fn()>) {
         });
     }
 
+    // Expose folder/navigation as app actions while the wizard is open, so the
+    // whole flow is driveable from outside (see dosui-ui-testing-via-gactions).
+    if let Some(app) = parent.application() {
+        register_wizard_actions(&app, &window, &wiz.folder, &back, &next, &cancel);
+    }
+
     window.present();
+}
+
+/// Temporary app actions mirroring the wizard controls (`wizard-set-folder`
+/// with a string path, `wizard-next` / `wizard-back` / `wizard-cancel`), removed
+/// when the wizard closes. Lets the flow be scripted without on-screen input.
+fn register_wizard_actions(
+    app: &gtk::Application,
+    window: &Window,
+    folder: &Entry,
+    back: &Button,
+    next: &Button,
+    cancel: &Button,
+) {
+    let set = gio::SimpleAction::new("wizard-set-folder", Some(gtk::glib::VariantTy::STRING));
+    {
+        let folder = folder.clone();
+        set.connect_activate(move |_, param| {
+            if let Some(path) = param.and_then(|v| v.str()) {
+                folder.set_text(path);
+            }
+        });
+    }
+    app.add_action(&set);
+
+    for (name, button) in [
+        ("wizard-next", next),
+        ("wizard-back", back),
+        ("wizard-cancel", cancel),
+    ] {
+        let action = gio::SimpleAction::new(name, None);
+        let button = button.clone();
+        action.connect_activate(move |_, _| button.emit_clicked());
+        app.add_action(&action);
+    }
+
+    let app = app.clone();
+    window.connect_close_request(move |_| {
+        for name in [
+            "wizard-set-folder",
+            "wizard-next",
+            "wizard-back",
+            "wizard-cancel",
+        ] {
+            app.remove_action(name);
+        }
+        gtk::glib::Propagation::Proceed
+    });
 }
 
 /// Prepare a page as it becomes visible (rescan executables, prefill the title).
