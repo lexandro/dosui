@@ -208,6 +208,29 @@ pub fn new_profile_dir(title: &str) -> Result<(String, PathBuf)> {
     Ok(allocate_dir(&super::paths::profiles_dir()?, title))
 }
 
+/// Duplicate a profile: create a new "<title> (copy)" profile directory next to
+/// the others, copying a relative cover image. Returns the new directory.
+pub fn duplicate(src_dir: &Path, profile: &Profile) -> Result<PathBuf> {
+    let title = format!("{} (copy)", profile.title);
+    let (id, dir) = new_profile_dir(&title)?;
+    let mut copy = profile.clone();
+    copy.id = id;
+    copy.title = title;
+    copy.last_played = None;
+
+    fs::create_dir_all(&dir).with_context(|| format!("creating profile dir {}", dir.display()))?;
+    if let Some(cover) = &copy.cover {
+        if cover.is_relative() {
+            let from = src_dir.join(cover);
+            if from.exists() {
+                let _ = fs::copy(&from, dir.join(cover));
+            }
+        }
+    }
+    copy.save(&dir)?;
+    Ok(dir)
+}
+
 /// File names of DOS executables (`.exe`/`.bat`/`.com`) directly in `dir`,
 /// sorted case-insensitively. Used by the new-profile wizard.
 pub fn scan_executables(dir: &Path) -> Vec<String> {

@@ -11,9 +11,9 @@ use std::rc::Rc;
 use gtk::glib::BoxedAnyObject;
 use gtk::prelude::*;
 use gtk::{
-    gio, AlertDialog, Application, ApplicationWindow, Box as GtkBox, Button, ContentFit, GridView,
-    HeaderBar, Label, ListItem, Orientation, Paned, Picture, ScrolledWindow, SearchEntry,
-    SignalListItemFactory, SingleSelection,
+    gio, AlertDialog, Application, ApplicationWindow, Box as GtkBox, Button, ContentFit,
+    FileLauncher, GridView, HeaderBar, Label, ListItem, Orientation, Paned, Picture,
+    ScrolledWindow, SearchEntry, SignalListItemFactory, SingleSelection,
 };
 
 use crate::app::APP_NAME;
@@ -226,10 +226,118 @@ fn install_actions(
     }
     app.add_action(&settings);
 
+    let delete = gio::SimpleAction::new("delete", None);
+    {
+        let profiles = profiles.clone();
+        let selection = selection.clone();
+        let window = window.downgrade();
+        let reload = reload.clone();
+        delete.connect_activate(move |_, _| {
+            let Some(i) = selected_index(&selection) else {
+                return;
+            };
+            let (dir, title) = match profiles.borrow().get(i) {
+                Some((dir, prof)) => (dir.clone(), prof.title.clone()),
+                None => return,
+            };
+            let Some(window) = window.upgrade() else {
+                return;
+            };
+            let reload = reload.clone();
+            let dialog = AlertDialog::builder()
+                .modal(true)
+                .message(format!("Delete “{title}”?"))
+                .detail("This removes the profile. The game files are not touched.")
+                .buttons(["Cancel", "Delete"])
+                .cancel_button(0)
+                .default_button(0)
+                .build();
+            dialog.choose(Some(&window), gio::Cancellable::NONE, move |res| {
+                if res == Ok(1) {
+                    if let Err(e) = std::fs::remove_dir_all(&dir) {
+                        log::error!("deleting profile failed: {e:#}");
+                    }
+                    reload();
+                }
+            });
+        });
+    }
+    app.add_action(&delete);
+
+    let duplicate = gio::SimpleAction::new("duplicate", None);
+    {
+        let profiles = profiles.clone();
+        let selection = selection.clone();
+        let reload = reload.clone();
+        duplicate.connect_activate(move |_, _| {
+            let Some(i) = selected_index(&selection) else {
+                return;
+            };
+            let (dir, prof) = match profiles.borrow().get(i) {
+                Some((dir, prof)) => (dir.clone(), prof.clone()),
+                None => return,
+            };
+            if let Err(e) = profile::duplicate(&dir, &prof) {
+                log::error!("duplicating profile failed: {e:#}");
+            }
+            reload();
+        });
+    }
+    app.add_action(&duplicate);
+
+    let open_folder = gio::SimpleAction::new("open-folder", None);
+    {
+        let profiles = profiles.clone();
+        let selection = selection.clone();
+        let window = window.downgrade();
+        open_folder.connect_activate(move |_, _| {
+            let Some(i) = selected_index(&selection) else {
+                return;
+            };
+            let dir = match profiles.borrow().get(i) {
+                Some((dir, _)) => dir.clone(),
+                None => return,
+            };
+            let launcher = FileLauncher::new(Some(&gio::File::for_path(&dir)));
+            launcher.launch(window.upgrade().as_ref(), gio::Cancellable::NONE, |res| {
+                if let Err(e) = res {
+                    log::warn!("opening folder failed: {e}");
+                }
+            });
+        });
+    }
+    app.add_action(&open_folder);
+
+    let about = gio::SimpleAction::new("about", None);
+    {
+        let window = window.downgrade();
+        about.connect_activate(move |_, _| {
+            if let Some(window) = window.upgrade() {
+                AlertDialog::builder()
+                    .modal(true)
+                    .message(APP_NAME)
+                    .detail("Lightweight native Linux frontend for DOSBox.\nRust + GTK4.")
+                    .build()
+                    .show(Some(&window));
+            }
+        });
+    }
+    app.add_action(&about);
+
+    let quit = gio::SimpleAction::new("quit", None);
+    {
+        let app = app.clone();
+        quit.connect_activate(move |_, _| app.quit());
+    }
+    app.add_action(&quit);
+
     app.set_accels_for_action("app.play", &["<Ctrl>p"]);
     app.set_accels_for_action("app.edit", &["<Ctrl>e"]);
     app.set_accels_for_action("app.new", &["<Ctrl>n"]);
+    app.set_accels_for_action("app.duplicate", &["<Ctrl>d"]);
+    app.set_accels_for_action("app.delete", &["Delete"]);
     app.set_accels_for_action("app.settings", &["<Ctrl>comma"]);
+    app.set_accels_for_action("app.quit", &["<Ctrl>q"]);
 }
 
 /// Build a callback that rescans profiles and rebuilds the grid.
