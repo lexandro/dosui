@@ -96,6 +96,21 @@ pub fn dropdown_row(label: &str, options: &[&str], selected: Option<&str>) -> (G
     (labeled(label, &dd), dd)
 }
 
+/// `Some(trimmed)` unless the trimmed text is empty.
+pub fn none_if_empty(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+/// `&str` view of an optional string, for pre-filling an entry.
+pub fn opt(value: &Option<String>) -> &str {
+    value.as_deref().unwrap_or("")
+}
+
 /// Whole-buffer text of a `TextView`.
 pub fn textview_text(view: &TextView) -> String {
     let buffer = view.buffer();

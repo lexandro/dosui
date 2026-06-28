@@ -5,6 +5,8 @@ pub mod bulk_edit;
 pub mod category_sidebar;
 pub mod detail;
 pub mod dosbox_form;
+pub mod editor_general;
+pub mod editor_mounts;
 pub mod grid;
 pub mod headerbar;
 pub mod library;
