@@ -13,7 +13,7 @@ use gtk::prelude::*;
 use gtk::{
     gio, AlertDialog, Application, ApplicationWindow, Box as GtkBox, Button, ContentFit,
     FileLauncher, GridView, HeaderBar, Label, ListItem, Orientation, Paned, Picture,
-    ScrolledWindow, SearchEntry, Separator, SignalListItemFactory, SingleSelection,
+    PopoverMenuBar, ScrolledWindow, SearchEntry, Separator, SignalListItemFactory, SingleSelection,
 };
 
 use crate::app::APP_NAME;
@@ -104,11 +104,41 @@ pub fn build(app: &Application) {
         .vexpand(true)
         .build();
     let body = GtkBox::builder().orientation(Orientation::Vertical).build();
+    body.append(&build_menubar());
     body.append(&build_toolbar());
     body.append(&root);
     window.set_child(Some(&body));
 
     window.present();
+}
+
+/// Classic D-Fend-style menu bar (File / Profile / Settings / Help), bound to
+/// the app actions.
+fn build_menubar() -> PopoverMenuBar {
+    let file = gio::Menu::new();
+    file.append(Some("New profile"), Some("app.new"));
+    file.append(Some("Quit"), Some("app.quit"));
+
+    let profile = gio::Menu::new();
+    profile.append(Some("Run"), Some("app.play"));
+    profile.append(Some("Edit"), Some("app.edit"));
+    profile.append(Some("Duplicate"), Some("app.duplicate"));
+    profile.append(Some("Delete"), Some("app.delete"));
+    profile.append(Some("Open folder"), Some("app.open-folder"));
+
+    let settings = gio::Menu::new();
+    settings.append(Some("Preferences"), Some("app.settings"));
+
+    let help = gio::Menu::new();
+    help.append(Some("About dosui"), Some("app.about"));
+
+    let menu = gio::Menu::new();
+    menu.append_submenu(Some("File"), &file);
+    menu.append_submenu(Some("Profile"), &profile);
+    menu.append_submenu(Some("Settings"), &settings);
+    menu.append_submenu(Some("Help"), &help);
+
+    PopoverMenuBar::from_model(Some(&menu))
 }
 
 /// A flat icon toolbar button bound to an app action.
