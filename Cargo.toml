@@ -1,0 +1,23 @@
+[package]
+name = "dosui"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+description = "Lightweight native Linux frontend for DOSBox, D-Fend Reloaded style"
+license = "MIT"
+
+[dependencies]
+gtk = { package = "gtk4", version = "0.9", features = ["v4_12"] }
+
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+indexmap = { version = "2", features = ["serde"] }
+
+directories = "5"
+which = "6"
+
+anyhow = "1"
+thiserror = "1"
+
+log = "0.4"
+env_logger = "0.11"
