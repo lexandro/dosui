@@ -51,6 +51,7 @@ const SCALER_OPTS: [&str; 4] = [DEFAULT, "none", "normal2x", "normal3x"];
 const ASPECT_OPTS: [&str; 3] = [DEFAULT, "on", "off"];
 const SBTYPE_OPTS: [&str; 6] = [DEFAULT, "sb16", "sbpro2", "sb2", "gb", "none"];
 const RATE_OPTS: [&str; 6] = [DEFAULT, "22050", "32000", "44100", "48000", "49716"];
+const MIDI_OPTS: [&str; 5] = [DEFAULT, "auto", "mt32", "fluidsynth", "none"];
 
 /// The DOSBox tab pages plus the widgets read on save.
 pub struct DosboxForm {
@@ -69,6 +70,7 @@ pub struct DosboxForm {
     cycles: DropDown,
     sbtype: DropDown,
     rate: DropDown,
+    mididevice: DropDown,
     passthrough: TextView,
     preview: TextView,
 }
@@ -146,6 +148,13 @@ impl DosboxForm {
             default_label,
         );
         sound_page.append(&row);
+        let (row, mididevice) = config_row(
+            "MIDI device",
+            &MIDI_OPTS,
+            config.mididevice.as_deref(),
+            default_label,
+        );
+        sound_page.append(&row);
 
         let advanced_page = widgets::page();
         advanced_page.append(&hint(
@@ -176,6 +185,7 @@ impl DosboxForm {
             cycles,
             sbtype,
             rate,
+            mididevice,
             passthrough,
             preview,
         }
@@ -194,6 +204,7 @@ impl DosboxForm {
             scaler: cfg_opt(&self.scaler),
             sbtype: cfg_opt(&self.sbtype),
             rate: cfg_opt(&self.rate).and_then(|s| s.parse().ok()),
+            mididevice: cfg_opt(&self.mididevice),
             passthrough: parse_passthrough(&widgets::textview_text(&self.passthrough)),
         }
     }

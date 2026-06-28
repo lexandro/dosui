@@ -51,6 +51,9 @@ pub struct DosboxConfig {
     /// `[mixer] rate` (Hz)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rate: Option<u32>,
+    /// `[midi] mididevice` — auto / mt32 / fluidsynth / none
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mididevice: Option<String>,
 
     /// Advanced / unmodeled keys: section -> (key -> value), order preserved.
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
@@ -85,6 +88,7 @@ impl DosboxConfig {
             scaler: pick(&overrides.scaler, &self.scaler),
             sbtype: pick(&overrides.sbtype, &self.sbtype),
             rate: overrides.rate.or(self.rate),
+            mididevice: pick(&overrides.mididevice, &self.mididevice),
             passthrough,
         }
     }
@@ -124,6 +128,9 @@ impl DosboxConfig {
         }
         if let Some(v) = &self.sbtype {
             put(&mut sections, "sblaster", "sbtype", v.clone());
+        }
+        if let Some(v) = &self.mididevice {
+            put(&mut sections, "midi", "mididevice", v.clone());
         }
 
         // Passthrough merges underneath; typed keys already set above win.
