@@ -21,6 +21,7 @@ use gtk::{
 use crate::app::APP_NAME;
 use crate::config::profile::{self, Profile};
 use crate::launcher;
+use crate::ui::category_sidebar::{Category, CategorySidebar};
 use crate::ui::profile_editor;
 
 /// Loaded profile together with its on-disk directory (needed to launch).
@@ -58,11 +59,21 @@ pub fn build(app: &Application) {
     let store = gio::ListStore::new::<BoxedAnyObject>();
     fill_store(&store, &profiles.borrow());
 
-    // Find-as-you-type: a shared query string drives a CustomFilter over the store.
+    // Find-as-you-type + category filtering: a shared query string and active
+    // category drive a CustomFilter over the store.
     let query: Rc<RefCell<String>> = Rc::new(RefCell::new(String::new()));
-    let filter = build_filter(&query);
+    let active_category = Rc::new(RefCell::new(Category::All));
+    let filter = build_filter(&query, &active_category);
     let filter_model = FilterListModel::new(Some(store.clone()), Some(filter.clone()));
     let selection = SingleSelection::new(Some(filter_model));
+
+    // Category sidebar drives the same filter.
+    let sidebar = Rc::new({
+        let filter = filter.clone();
+        let on_change: Rc<dyn Fn()> = Rc::new(move || filter.changed(FilterChange::Different));
+        CategorySidebar::new(active_category.clone(), on_change)
+    });
+    sidebar.rebuild(&profiles.borrow());
 
     let grid = GridView::builder()
         .model(&selection)
@@ -96,7 +107,7 @@ pub fn build(app: &Application) {
     }
 
     // Rebuilds the store from disk and reselects the first item (used after edits).
-    let reload = make_reload(&store, &profiles, &selection, &detail);
+    let reload = make_reload(&store, &profiles, &selection, &detail, &sidebar);
 
     // Buttons route through GActions: single source of truth, accelerators, and
     // external testability (`gapplication action io.github.dosui play`).
@@ -113,11 +124,17 @@ pub fn build(app: &Application) {
 
     select_first(&selection, &detail);
 
-    let root = Paned::builder()
+    let content = Paned::builder()
         .orientation(Orientation::Horizontal)
         .position(360)
         .start_child(&grid_scroller)
         .end_child(&detail.container)
+        .build();
+    let root = Paned::builder()
+        .orientation(Orientation::Horizontal)
+        .position(200)
+        .start_child(&sidebar.scroller)
+        .end_child(&content)
         .vexpand(true)
         .build();
     let body = GtkBox::builder().orientation(Orientation::Vertical).build();
@@ -439,14 +456,17 @@ fn make_reload(
     profiles: &Profiles,
     selection: &SingleSelection,
     detail: &Detail,
+    sidebar: &Rc<CategorySidebar>,
 ) -> Rc<dyn Fn()> {
     let store = store.clone();
     let profiles = profiles.clone();
     let selection = selection.clone();
     let detail = detail.clone();
+    let sidebar = sidebar.clone();
     Rc::new(move || {
         *profiles.borrow_mut() = load_profiles();
         fill_store(&store, &profiles.borrow());
+        sidebar.rebuild(&profiles.borrow()); // refresh categories + reset to All
         select_first(&selection, &detail);
     })
 }
@@ -459,17 +479,21 @@ fn fill_store(store: &gio::ListStore, profiles: &[Entry]) {
     }
 }
 
-/// A title-substring filter driven by the shared `query` string.
-fn build_filter(query: &Rc<RefCell<String>>) -> CustomFilter {
+/// Filter on the title substring (search) AND the active category.
+fn build_filter(query: &Rc<RefCell<String>>, category: &Rc<RefCell<Category>>) -> CustomFilter {
     let query = query.clone();
+    let category = category.clone();
     CustomFilter::new(move |obj| {
-        let needle = query.borrow().to_lowercase();
-        if needle.is_empty() {
+        let Some(obj) = obj.downcast_ref::<BoxedAnyObject>() else {
             return true;
+        };
+        let entry = obj.borrow::<Entry>();
+        let profile = &entry.1;
+        if !category.borrow().matches(profile) {
+            return false;
         }
-        obj.downcast_ref::<BoxedAnyObject>()
-            .map(|o| o.borrow::<Entry>().1.title.to_lowercase().contains(&needle))
-            .unwrap_or(true)
+        let needle = query.borrow().to_lowercase();
+        needle.is_empty() || profile.title.to_lowercase().contains(&needle)
     })
 }
 
