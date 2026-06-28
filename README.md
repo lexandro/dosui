@@ -34,10 +34,20 @@ natívan illeszkedik a Linux desktophoz.
 
 ## Állapot
 
-✅ **Működő frontend.** Stack: **Rust + GTK4** (libadwaita nélkül), motor:
-**dosbox-staging**. Megvan: profil-rács borítókkal, indítás, tabos
-profilszerkesztő, új-profil varázsló (exe-szkenneléssel), globális defaultok +
-öröklés, menüsor + toolbar, és egyetlen **AppImage** becsomagolt dosbox-staginggel.
+✅ **Működő, D-Fend-szerű frontend.** Stack: **Rust + GTK4** (libadwaita nélkül),
+motor: **dosbox-staging**.
+
+Funkciók:
+- Borító-rács + részletek panel, indítás (Play / dupla-katt / Enter), „last played".
+- Tabos profilszerkesztő (General / Mounts & Run / CPU / Graphics / Sound / MIDI /
+  Advanced), élő `dosbox.conf` előnézet.
+- Új-profil varázsló (mappa → automatikus exe/bat szkennelés → metaadat).
+- Globális defaultok + per-profil öröklés; beállítások dialógus.
+- **Menüsor + toolbar + jobbklikk context-menü**; gyorsbillentyűk.
+- Kategória-oldalsáv (műfaj/fejlesztő/év/kedvencek) + find-as-you-type kereső.
+- Kedvencek, duplikálás, törlés, mappanyitás, **tömeges metaadat-szerkesztés**.
+- Import: **dosbox.conf** (D-Fend/DBGL) és **zip** (drag & drop is).
+- Egyetlen **AppImage** becsomagolt dosbox-staginggel, a gazdagép témáját követve.
 
 ## Fejlesztés
 
