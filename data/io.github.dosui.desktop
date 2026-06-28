@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=dosui
+GenericName=DOSBox Frontend
+Comment=Lightweight native frontend for DOSBox
+Exec=dosui
+Icon=io.github.dosui
+Terminal=false
+Categories=Game;Emulator;
+Keywords=DOS;DOSBox;games;emulator;retro;
