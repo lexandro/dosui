@@ -14,8 +14,8 @@ use gtk::prelude::*;
 use gtk::{
     gio, AlertDialog, Application, ApplicationWindow, Box as GtkBox, Button, ContentFit,
     CustomFilter, FileLauncher, FilterChange, FilterListModel, GridView, HeaderBar, Label,
-    ListItem, Orientation, Paned, Picture, PopoverMenuBar, ScrolledWindow, SearchEntry, Separator,
-    SignalListItemFactory, SingleSelection,
+    ListItem, Orientation, Paned, Picture, PopoverMenu, PopoverMenuBar, ScrolledWindow,
+    SearchEntry, Separator, SignalListItemFactory, SingleSelection,
 };
 
 use crate::app::APP_NAME;
@@ -77,10 +77,14 @@ pub fn build(app: &Application) {
 
     let grid = GridView::builder()
         .model(&selection)
-        .factory(&build_factory())
         .max_columns(8)
         .min_columns(2)
         .build();
+    // Right-click context menu (parented to the grid, anchored at the pointer).
+    let context_menu = PopoverMenu::from_model(Some(&build_profile_menu()));
+    context_menu.set_parent(&grid);
+    context_menu.set_has_arrow(false);
+    grid.set_factory(Some(&build_factory(&selection, &grid, &context_menu)));
     let grid_scroller = ScrolledWindow::builder()
         .child(&grid)
         .width_request(360)
@@ -153,14 +157,6 @@ fn build_menubar() -> PopoverMenuBar {
     file.append(Some("New profile"), Some("app.new"));
     file.append(Some("Quit"), Some("app.quit"));
 
-    let profile = gio::Menu::new();
-    profile.append(Some("Run"), Some("app.play"));
-    profile.append(Some("Edit"), Some("app.edit"));
-    profile.append(Some("Duplicate"), Some("app.duplicate"));
-    profile.append(Some("Toggle favorite"), Some("app.favorite"));
-    profile.append(Some("Delete"), Some("app.delete"));
-    profile.append(Some("Open folder"), Some("app.open-folder"));
-
     let settings = gio::Menu::new();
     settings.append(Some("Preferences"), Some("app.settings"));
 
@@ -169,11 +165,23 @@ fn build_menubar() -> PopoverMenuBar {
 
     let menu = gio::Menu::new();
     menu.append_submenu(Some("File"), &file);
-    menu.append_submenu(Some("Profile"), &profile);
+    menu.append_submenu(Some("Profile"), &build_profile_menu());
     menu.append_submenu(Some("Settings"), &settings);
     menu.append_submenu(Some("Help"), &help);
 
     PopoverMenuBar::from_model(Some(&menu))
+}
+
+/// The profile command menu, reused by the menu bar and the grid context menu.
+fn build_profile_menu() -> gio::Menu {
+    let menu = gio::Menu::new();
+    menu.append(Some("Run"), Some("app.play"));
+    menu.append(Some("Edit"), Some("app.edit"));
+    menu.append(Some("Duplicate"), Some("app.duplicate"));
+    menu.append(Some("Toggle favorite"), Some("app.favorite"));
+    menu.append(Some("Delete"), Some("app.delete"));
+    menu.append(Some("Open folder"), Some("app.open-folder"));
+    menu
 }
 
 /// A flat icon toolbar button bound to an app action.
@@ -225,11 +233,19 @@ fn build_toolbar() -> GtkBox {
     bar
 }
 
-/// Build the factory that renders each grid cell (cover thumbnail + title).
-fn build_factory() -> SignalListItemFactory {
+/// Build the factory that renders each grid cell (cover thumbnail + title) and
+/// wires a secondary-click context menu.
+fn build_factory(
+    selection: &SingleSelection,
+    grid: &GridView,
+    menu: &PopoverMenu,
+) -> SignalListItemFactory {
     let factory = SignalListItemFactory::new();
+    let selection = selection.clone();
+    let grid = grid.clone();
+    let menu = menu.clone();
 
-    factory.connect_setup(|_, item| {
+    factory.connect_setup(move |_, item| {
         let item = item.downcast_ref::<ListItem>().expect("ListItem");
         let cover = Picture::builder()
             .content_fit(ContentFit::Contain)
@@ -251,6 +267,30 @@ fn build_factory() -> SignalListItemFactory {
         cell.append(&cover);
         cell.append(&title);
         item.set_child(Some(&cell));
+
+        // Secondary-click: select this cell and open the profile context menu.
+        let gesture = gtk::GestureClick::new();
+        gesture.set_button(gtk::gdk::BUTTON_SECONDARY);
+        let selection = selection.clone();
+        let grid = grid.clone();
+        let menu = menu.clone();
+        let item = item.clone();
+        let cell_for_click = cell.clone();
+        gesture.connect_pressed(move |gesture, _, x, y| {
+            let pos = item.position();
+            if pos != gtk::INVALID_LIST_POSITION {
+                selection.set_selected(pos);
+            }
+            let point = gtk::graphene::Point::new(x as f32, y as f32);
+            let (gx, gy) = cell_for_click
+                .compute_point(&grid, &point)
+                .map(|p| (p.x() as i32, p.y() as i32))
+                .unwrap_or((x as i32, y as i32));
+            menu.set_pointing_to(Some(&gtk::gdk::Rectangle::new(gx, gy, 1, 1)));
+            menu.popup();
+            gesture.set_state(gtk::EventSequenceState::Claimed);
+        });
+        cell.add_controller(gesture);
     });
 
     factory.connect_bind(|_, item| {
