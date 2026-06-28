@@ -25,11 +25,11 @@ const CONF_FILE: &str = "dosbox.conf";
 ///
 /// Returns once the process has been *spawned*; the game runs asynchronously so
 /// the UI never blocks. Exit status is logged when DOSBox quits.
-pub fn launch(profile_dir: &Path, profile: &Profile, settings: &AppSettings) -> Result<()> {
-    // effective = global defaults <- per-profile overrides
+pub fn launch(profile_dir: &Path, profile: &Profile) -> Result<()> {
+    // Settings and defaults are loaded fresh so edits take effect without a restart.
     let effective = defaults::load().merge(&profile.dosbox);
     let conf_path = write_conf(profile_dir, &effective, &profile.run)?;
-    let binary = resolve_dosbox(settings)?;
+    let binary = resolve_dosbox(&AppSettings::load())?;
     spawn(&binary, &conf_path, profile_dir)
         .with_context(|| format!("launching {}", binary.display()))
 }
