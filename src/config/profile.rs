@@ -1,0 +1,204 @@
+//! Game profile model — the serializable content of each `profile.toml`.
+//!
+//! A profile is one DOS game/program: its metadata plus a [`RunSpec`] describing
+//! what to mount and run. The per-profile DOSBox config *overrides* are attached
+//! in M1.2 (see `dosbox_conf`). Profiles live one-per-directory under
+//! [`crate::config::paths::profiles_dir`]; the directory name is the profile id.
+
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
+
+/// File name of the profile descriptor inside each profile directory.
+pub const PROFILE_FILE: &str = "profile.toml";
+
+/// One game/program managed by dosui. Round-trips to `profile.toml`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Profile {
+    /// Stable id; also the on-disk directory name.
+    pub id: String,
+    /// Display name, e.g. "Dune 2".
+    pub title: String,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub genre: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub year: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub developer: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub publisher: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub www: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
+    /// Cover image path, relative to the profile directory.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub favorite: bool,
+
+    /// What to mount and execute. Drives the generated `[autoexec]`.
+    pub run: RunSpec,
+}
+
+/// What DOSBox should mount and run for this profile.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RunSpec {
+    #[serde(default)]
+    pub mounts: Vec<Mount>,
+    /// Drive switched to before running the command, e.g. 'C'.
+    pub working_drive: char,
+    /// Program to run, e.g. "DUNE2.EXE" or "INSTALL.BAT".
+    pub command: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// Append `exit` to autoexec so DOSBox closes when the program quits.
+    #[serde(default)]
+    pub exit_after: bool,
+}
+
+/// A single DOSBox drive mount (a directory or a disk image).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Mount {
+    /// Drive letter, e.g. 'C'.
+    pub drive: char,
+    pub kind: MountKind,
+    /// Host path to the directory or image file.
+    pub path: PathBuf,
+    /// Optional volume label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+}
+
+/// How a [`Mount`] is attached. Maps to `mount` vs `imgmount -t …`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MountKind {
+    /// A host directory mounted as a drive (`mount C /path`).
+    Directory,
+    /// CD image (`imgmount D image.cue -t cdrom`).
+    CdImage,
+    /// Floppy image (`imgmount A image.img -t floppy`).
+    FloppyImage,
+    /// Hard-disk image (`imgmount C image.img -t hdd`).
+    HddImage,
+}
+
+impl Profile {
+    /// Load `<profile_dir>/profile.toml`.
+    pub fn load(profile_dir: &Path) -> Result<Profile> {
+        let path = profile_dir.join(PROFILE_FILE);
+        let text = fs::read_to_string(&path)
+            .with_context(|| format!("reading profile {}", path.display()))?;
+        toml::from_str(&text).with_context(|| format!("parsing profile {}", path.display()))
+    }
+
+    /// Write `<profile_dir>/profile.toml`, creating the directory if needed.
+    pub fn save(&self, profile_dir: &Path) -> Result<()> {
+        fs::create_dir_all(profile_dir)
+            .with_context(|| format!("creating profile dir {}", profile_dir.display()))?;
+        let text = toml::to_string_pretty(self).context("serializing profile")?;
+        let path = profile_dir.join(PROFILE_FILE);
+        fs::write(&path, text).with_context(|| format!("writing profile {}", path.display()))
+    }
+}
+
+/// Scan a profiles root, returning each profile paired with its directory.
+///
+/// Subdirectories without a readable `profile.toml` are skipped with a warning,
+/// so one broken profile never hides the rest. A missing root yields an empty list.
+pub fn scan(profiles_dir: &Path) -> Result<Vec<(PathBuf, Profile)>> {
+    if !profiles_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut out = Vec::new();
+    for entry in fs::read_dir(profiles_dir)
+        .with_context(|| format!("reading profiles dir {}", profiles_dir.display()))?
+    {
+        let dir = entry?.path();
+        if !dir.is_dir() {
+            continue;
+        }
+        match Profile::load(&dir) {
+            Ok(profile) => out.push((dir, profile)),
+            Err(e) => log::warn!("skipping {}: {e:#}", dir.display()),
+        }
+    }
+    out.sort_by(|a, b| a.1.title.to_lowercase().cmp(&b.1.title.to_lowercase()));
+    Ok(out)
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample() -> Profile {
+        Profile {
+            id: "dune2".into(),
+            title: "Dune II".into(),
+            genre: Some("Strategy".into()),
+            year: Some(1992),
+            developer: Some("Westwood".into()),
+            publisher: None,
+            www: None,
+            notes: None,
+            cover: None,
+            favorite: true,
+            run: RunSpec {
+                mounts: vec![Mount {
+                    drive: 'C',
+                    kind: MountKind::Directory,
+                    path: "/games/dune2".into(),
+                    label: None,
+                }],
+                working_drive: 'C',
+                command: "DUNE2.EXE".into(),
+                args: vec![],
+                exit_after: true,
+            },
+        }
+    }
+
+    #[test]
+    fn toml_round_trip_preserves_profile() {
+        let p = sample();
+        let text = toml::to_string_pretty(&p).unwrap();
+        let back: Profile = toml::from_str(&text).unwrap();
+        assert_eq!(p, back);
+    }
+
+    #[test]
+    fn save_then_load_round_trips_on_disk() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = sample();
+        p.save(tmp.path()).unwrap();
+        let back = Profile::load(tmp.path()).unwrap();
+        assert_eq!(p, back);
+    }
+
+    #[test]
+    fn scan_finds_profiles_and_skips_non_profile_dirs() {
+        let root = tempfile::tempdir().unwrap();
+        sample().save(&root.path().join("dune2")).unwrap();
+        fs::create_dir_all(root.path().join("empty")).unwrap();
+
+        let found = scan(root.path()).unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].1.id, "dune2");
+    }
+
+    #[test]
+    fn scan_missing_root_is_empty() {
+        let root = tempfile::tempdir().unwrap();
+        let missing = root.path().join("nope");
+        assert!(scan(&missing).unwrap().is_empty());
+    }
+}

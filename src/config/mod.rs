@@ -4,9 +4,9 @@
 //! display server (see the plan's verification section).
 
 pub mod paths;
+pub mod profile;
 
 // Filled in during M1+:
 // pub mod settings;
 // pub mod defaults;
-// pub mod profile;
 // pub mod dosbox_conf;
