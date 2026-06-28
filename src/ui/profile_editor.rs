@@ -68,6 +68,7 @@ struct General {
     developer: Entry,
     publisher: Entry,
     www: Entry,
+    cover: Entry,
     notes: TextView,
 }
 
@@ -107,7 +108,7 @@ pub fn open_for_edit(
     let notebook = Notebook::new();
     notebook.set_vexpand(true);
 
-    let general = build_general(&profile);
+    let general = build_general(&profile, &window);
     notebook.append_page(&general.0, Some(&Label::new(Some("General"))));
     let run = build_run(&profile, &window);
     notebook.append_page(&run.0, Some(&Label::new(Some("Mounts & Run"))));
@@ -206,7 +207,7 @@ fn action_bar() -> ActionBar {
 }
 
 /// General tab: metadata.
-fn build_general(profile: &Profile) -> (GtkBox, General) {
+fn build_general(profile: &Profile, window: &Window) -> (GtkBox, General) {
     let page = widgets::page();
 
     let (row, title) = widgets::entry_row("Title", &profile.title);
@@ -224,6 +225,32 @@ fn build_general(profile: &Profile) -> (GtkBox, General) {
     page.append(&row);
     let (row, www) = widgets::entry_row("Website", opt(&profile.www));
     page.append(&row);
+    let cover_text = profile
+        .cover
+        .as_ref()
+        .map(|c| c.display().to_string())
+        .unwrap_or_default();
+    let (row, cover, browse) = widgets::file_row("Cover image", &cover_text);
+    page.append(&row);
+    {
+        let window = window.downgrade();
+        let cover = cover.clone();
+        browse.connect_clicked(move |_| {
+            let dialog = FileDialog::builder().title("Select cover image").build();
+            let cover = cover.clone();
+            dialog.open(
+                window.upgrade().as_ref(),
+                gio::Cancellable::NONE,
+                move |res| {
+                    if let Ok(file) = res {
+                        if let Some(path) = file.path() {
+                            cover.set_text(&path.display().to_string());
+                        }
+                    }
+                },
+            );
+        });
+    }
 
     page.append(
         &Label::builder()
@@ -251,6 +278,7 @@ fn build_general(profile: &Profile) -> (GtkBox, General) {
         developer,
         publisher,
         www,
+        cover,
         notes,
     };
     (page, widgets)
@@ -427,6 +455,7 @@ fn collect(fields: &Fields, original: &Profile) -> Profile {
     p.developer = none_if_empty(&g.developer.text());
     p.publisher = none_if_empty(&g.publisher.text());
     p.www = none_if_empty(&g.www.text());
+    p.cover = none_if_empty(&g.cover.text()).map(PathBuf::from);
     p.notes = none_if_empty(&widgets::textview_text(&g.notes));
 
     // Mounts & Run

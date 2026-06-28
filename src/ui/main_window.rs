@@ -4,13 +4,13 @@
 //! category sidebar and cover grid arrive in later milestones (plan §2.5).
 
 use std::cell::RefCell;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::{
-    gio, AlertDialog, Application, ApplicationWindow, Box as GtkBox, Button, HeaderBar, Label,
-    ListBox, Orientation, Paned, ScrolledWindow, SearchEntry, SelectionMode,
+    gio, AlertDialog, Application, ApplicationWindow, Box as GtkBox, Button, ContentFit, HeaderBar,
+    Label, ListBox, Orientation, Paned, Picture, ScrolledWindow, SearchEntry, SelectionMode,
 };
 
 use crate::app::APP_NAME;
@@ -28,6 +28,7 @@ type Profiles = Rc<RefCell<Vec<Entry>>>;
 #[derive(Clone)]
 struct Detail {
     container: GtkBox,
+    cover: Picture,
     title: Label,
     meta: Label,
     notes: Label,
@@ -67,8 +68,8 @@ pub fn build(app: &Application) {
         let detail = detail.clone();
         list.connect_row_selected(move |_, row| match row {
             Some(row) => {
-                if let Some((_, profile)) = profiles.borrow().get(row.index() as usize) {
-                    show_profile(&detail, profile);
+                if let Some((dir, profile)) = profiles.borrow().get(row.index() as usize) {
+                    show_profile(&detail, dir, profile);
                 }
             }
             None => clear_detail(&detail),
@@ -289,6 +290,11 @@ fn profile_row(profile: &Profile) -> Label {
 
 /// Build the detail pane (empty state until a profile is selected).
 fn build_detail() -> Detail {
+    let cover = Picture::builder()
+        .content_fit(ContentFit::Contain)
+        .height_request(180)
+        .hexpand(true)
+        .build();
     let title = Label::builder()
         .halign(gtk::Align::Start)
         .css_classes(["title-2"])
@@ -327,6 +333,7 @@ fn build_detail() -> Detail {
         .margin_start(16)
         .margin_end(16)
         .build();
+    container.append(&cover);
     container.append(&title);
     container.append(&meta);
     container.append(&notes);
@@ -335,6 +342,7 @@ fn build_detail() -> Detail {
 
     let detail = Detail {
         container,
+        cover,
         title,
         meta,
         notes,
@@ -347,13 +355,14 @@ fn build_detail() -> Detail {
 }
 
 /// Fill the detail pane from a profile and enable Play/Edit.
-fn show_profile(detail: &Detail, profile: &Profile) {
+fn show_profile(detail: &Detail, dir: &Path, profile: &Profile) {
     detail.title.set_text(&profile.title);
     detail.meta.set_text(&meta_line(profile));
     detail
         .notes
         .set_text(profile.notes.as_deref().unwrap_or(""));
     detail.last_played.set_text(&last_played_line(profile));
+    set_cover(detail, cover_path(dir, profile).as_deref());
     detail.play.set_sensitive(true);
     detail.edit.set_sensitive(true);
 }
@@ -364,8 +373,34 @@ fn clear_detail(detail: &Detail) {
     detail.meta.set_text("");
     detail.notes.set_text("");
     detail.last_played.set_text("");
+    set_cover(detail, None);
     detail.play.set_sensitive(false);
     detail.edit.set_sensitive(false);
+}
+
+/// Resolve a profile's cover to an absolute path (relative covers join `dir`).
+fn cover_path(dir: &Path, profile: &Profile) -> Option<PathBuf> {
+    profile.cover.as_ref().map(|c| {
+        if c.is_absolute() {
+            c.clone()
+        } else {
+            dir.join(c)
+        }
+    })
+}
+
+/// Show the cover image (hidden when absent or missing on disk).
+fn set_cover(detail: &Detail, path: Option<&Path>) {
+    match path {
+        Some(p) if p.exists() => {
+            detail.cover.set_filename(p.to_str());
+            detail.cover.set_visible(true);
+        }
+        _ => {
+            detail.cover.set_filename(None::<&str>);
+            detail.cover.set_visible(false);
+        }
+    }
 }
 
 /// "Last played: …" line, or empty if never played.
