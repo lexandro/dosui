@@ -1,0 +1,20 @@
+# Mappák/fájlok, amiket a Claude figyelmen kívül hagyhat.
+# Build kimenet és függőségek — nem hasznos kontextus.
+/build/
+/dist/
+/target/
+/bin/
+/obj/
+node_modules/
+.venv/
+__pycache__/
+
+# Logok, ideiglenes fájlok
+*.log
+*.tmp
+
+# Bináris/asset, amit nem kell olvasni
+*.png
+*.jpg
+*.ico
+*.zip

@@ -1,0 +1,32 @@
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Editorok / IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- Build / kimenet (nyelv eldöntése után bővítjük) ---
+/build/
+/dist/
+/target/        # Rust / egyéb
+/bin/
+/obj/
+*.o
+*.out
+
+# --- Logok, ideiglenes ---
+*.log
+*.tmp
+
+# --- Helyi környezet ---
+.env
+.env.local
+
+# --- Nyelv-specifikus (aktiváljuk amikor eldől) ---
+# Go:     /vendor/
+# Python: __pycache__/  *.pyc  .venv/
+# Node:   node_modules/
