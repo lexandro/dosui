@@ -19,7 +19,7 @@ use gtk::{
 use indexmap::IndexMap;
 
 use crate::config::dosbox_conf::DosboxConfig;
-use crate::config::profile::{self, Mount, MountKind, Profile, RunSpec};
+use crate::config::profile::{Mount, MountKind, Profile, RunSpec};
 use crate::ui::widgets;
 
 /// Sentinel first option meaning "don't set this key — use the DOSBox default".
@@ -143,36 +143,18 @@ struct MountRow {
 }
 
 /// Where a save goes: an existing directory, or a new one derived from the title.
-enum Target {
-    Existing(PathBuf),
-    New,
-}
-
-/// Open the editor for an existing profile stored in `dir`.
+/// Open the editor for an existing profile stored in `dir`. New profiles are
+/// created via the wizard ([`crate::ui::wizard`]); the editor only edits.
 pub fn open_for_edit(
     parent: &ApplicationWindow,
     dir: PathBuf,
     profile: Profile,
     on_saved: Rc<dyn Fn()>,
 ) {
-    open(parent, profile, Target::Existing(dir), on_saved);
-}
-
-/// Open the editor for a brand-new profile. The directory/id is derived from the
-/// title on Save.
-pub fn open_for_new(parent: &ApplicationWindow, on_saved: Rc<dyn Fn()>) {
-    open(parent, default_profile(), Target::New, on_saved);
-}
-
-fn open(parent: &ApplicationWindow, profile: Profile, target: Target, on_saved: Rc<dyn Fn()>) {
-    let title = match target {
-        Target::Existing(_) => format!("Edit — {}", profile.title),
-        Target::New => "New profile".to_string(),
-    };
     let window = Window::builder()
         .transient_for(parent)
         .modal(true)
-        .title(title)
+        .title(format!("Edit — {}", profile.title))
         .default_width(620)
         .default_height(560)
         .build();
@@ -233,15 +215,7 @@ fn open(parent: &ApplicationWindow, profile: Profile, target: Target, on_saved: 
     {
         let window = window.clone();
         actions.save.connect_clicked(move |_| {
-            let mut updated = collect(&fields, &original);
-            let dir = match resolve_dir(&target, &mut updated) {
-                Ok(dir) => dir,
-                Err(e) => {
-                    log::error!("resolving save dir failed: {e:#}");
-                    show_error(&window, "Could not determine where to save", &e);
-                    return;
-                }
-            };
+            let updated = collect(&fields, &original);
             match updated.save(&dir) {
                 Ok(()) => {
                     on_saved();
@@ -725,43 +699,6 @@ fn first_char(text: &Option<String>, fallback: char) -> char {
 
 fn split_args(text: &str) -> Vec<String> {
     text.split_whitespace().map(str::to_string).collect()
-}
-
-/// Resolve the directory to save into. For a new profile, derive a unique
-/// slug from the (possibly just-edited) title and set it as the profile id.
-fn resolve_dir(target: &Target, profile: &mut Profile) -> anyhow::Result<PathBuf> {
-    match target {
-        Target::Existing(dir) => Ok(dir.clone()),
-        Target::New => {
-            let (id, dir) = profile::new_profile_dir(&profile.title)?;
-            profile.id = id;
-            Ok(dir)
-        }
-    }
-}
-
-/// A blank profile for the "New" flow.
-fn default_profile() -> Profile {
-    Profile {
-        id: String::new(),
-        title: "New profile".to_string(),
-        genre: None,
-        year: None,
-        developer: None,
-        publisher: None,
-        www: None,
-        notes: None,
-        cover: None,
-        favorite: false,
-        run: RunSpec {
-            mounts: Vec::new(),
-            working_drive: 'C',
-            command: String::new(),
-            args: Vec::new(),
-            exit_after: true,
-        },
-        dosbox: DosboxConfig::default(),
-    }
 }
 
 /// Register temporary `editor-save` / `editor-cancel` app actions that click the

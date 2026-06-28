@@ -161,7 +161,7 @@ fn install_actions(
         let reload = reload.clone();
         new.connect_activate(move |_, _| {
             if let Some(window) = window.upgrade() {
-                profile_editor::open_for_new(&window, reload.clone());
+                crate::ui::wizard::open(&window, reload.clone());
             }
         });
     }
