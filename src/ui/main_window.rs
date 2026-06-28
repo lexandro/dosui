@@ -13,12 +13,13 @@ use gtk::glib::BoxedAnyObject;
 use gtk::prelude::*;
 use gtk::{
     gio, AlertDialog, Application, ApplicationWindow, Box as GtkBox, Button, ContentFit,
-    CustomFilter, FileDialog, FileLauncher, FilterChange, FilterListModel, GridView, HeaderBar,
-    Label, ListItem, Orientation, Paned, Picture, PopoverMenu, PopoverMenuBar, ScrolledWindow,
-    SearchEntry, Separator, SignalListItemFactory, SingleSelection,
+    CustomFilter, DropTarget, FileDialog, FileLauncher, FilterChange, FilterListModel, GridView,
+    HeaderBar, Label, ListItem, Orientation, Paned, Picture, PopoverMenu, PopoverMenuBar,
+    ScrolledWindow, SearchEntry, Separator, SignalListItemFactory, SingleSelection,
 };
 
 use crate::app::APP_NAME;
+use crate::config::archive;
 use crate::config::conf_import;
 use crate::config::profile::{self, Profile};
 use crate::launcher;
@@ -148,6 +149,8 @@ pub fn build(app: &Application) {
     body.append(&root);
     window.set_child(Some(&body));
 
+    install_drop_target(&body, &reload);
+
     window.present();
 }
 
@@ -157,6 +160,7 @@ fn build_menubar() -> PopoverMenuBar {
     let file = gio::Menu::new();
     file.append(Some("New profile"), Some("app.new"));
     file.append(Some("Import dosbox.conf…"), Some("app.import"));
+    file.append(Some("Import zipped game…"), Some("app.import-zip"));
     file.append(Some("Quit"), Some("app.quit"));
 
     let settings = gio::Menu::new();
@@ -406,6 +410,34 @@ fn install_actions(
     }
     app.add_action(&import);
 
+    let import_zip = gio::SimpleAction::new("import-zip", None);
+    {
+        let window = window.downgrade();
+        let reload = reload.clone();
+        import_zip.connect_activate(move |_, _| {
+            let Some(window) = window.upgrade() else {
+                return;
+            };
+            let dialog = FileDialog::builder().title("Import zipped game").build();
+            let reload = reload.clone();
+            let parent = window.clone();
+            dialog.open(Some(&window), gio::Cancellable::NONE, move |res| {
+                let Ok(file) = res else { return };
+                let Some(path) = file.path() else { return };
+                if let Err(e) = archive::import_archive(&path) {
+                    log::error!("zip import failed: {e:#}");
+                    AlertDialog::builder()
+                        .message("Could not import archive")
+                        .detail(format!("{e:#}"))
+                        .build()
+                        .show(Some(&parent));
+                }
+                reload();
+            });
+        });
+    }
+    app.add_action(&import_zip);
+
     let settings = gio::SimpleAction::new("settings", None);
     {
         let window = window.downgrade();
@@ -632,6 +664,39 @@ fn launch_profile(dir: &Path, profile: &Profile, window: Option<ApplicationWindo
                 .show(Some(&window));
         }
     }
+}
+
+/// Accept dropped `.zip` archives anywhere on the window: import each as a profile.
+fn install_drop_target(widget: &GtkBox, reload: &Rc<dyn Fn()>) {
+    let drop = DropTarget::new(
+        gtk::gdk::FileList::static_type(),
+        gtk::gdk::DragAction::COPY,
+    );
+    let reload = reload.clone();
+    drop.connect_drop(move |_, value, _, _| {
+        let Ok(list) = value.get::<gtk::gdk::FileList>() else {
+            return false;
+        };
+        let mut imported = false;
+        for file in list.files() {
+            let Some(path) = file.path() else { continue };
+            let is_zip = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| e.eq_ignore_ascii_case("zip"));
+            if is_zip {
+                if let Err(e) = archive::import_archive(&path) {
+                    log::error!("dropped zip import failed: {e:#}");
+                }
+                imported = true;
+            }
+        }
+        if imported {
+            reload();
+        }
+        imported
+    });
+    widget.add_controller(drop);
 }
 
 /// Import a dosbox.conf into a fresh profile directory.

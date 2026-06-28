@@ -15,6 +15,7 @@ indexmap = { version = "2", features = ["serde"] }
 
 directories = "5"
 which = "6"
+zip = "2"
 
 anyhow = "1"
 thiserror = "1"

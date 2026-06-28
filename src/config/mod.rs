@@ -3,6 +3,7 @@
 //! Everything in this module is GTK-free so it can be unit-tested without a
 //! display server (see the plan's verification section).
 
+pub mod archive;
 pub mod conf_import;
 pub mod defaults;
 pub mod dosbox_conf;
