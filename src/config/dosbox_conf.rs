@@ -10,6 +10,9 @@
 //! offers known values via dropdowns, but new dosbox-staging values still work.
 //!
 //! The generated file is an output artifact, regenerated on every launch.
+//!
+//! Over the 150-line soft cap by design: the config model + INI rendering +
+//! inheritance merge, plus their inline tests.
 
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};

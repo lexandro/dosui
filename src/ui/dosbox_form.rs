@@ -4,6 +4,9 @@
 //! [`DosboxForm::collect`]. Shared by the profile editor (per-profile overrides)
 //! and the settings dialog (global defaults). Optional dropdowns use a
 //! `(default)`/`(inherit)` sentinel meaning "leave this key unset".
+//!
+//! Over the 150-line soft cap by design: one cohesive widget component (build +
+//! read-back of the same struct) plus its inline tests.
 
 use gtk::prelude::*;
 use gtk::{Box as GtkBox, DropDown, Label, ScrolledWindow, TextView};

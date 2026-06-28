@@ -4,6 +4,8 @@
 //! what to mount and run. The per-profile DOSBox config *overrides* are attached
 //! in M1.2 (see `dosbox_conf`). Profiles live one-per-directory under
 //! [`crate::config::paths::profiles_dir`]; the directory name is the profile id.
+//!
+//! Over the 150-line soft cap by design: the data model plus its inline tests.
 
 use std::fs;
 use std::path::{Path, PathBuf};

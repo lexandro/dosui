@@ -1,5 +1,8 @@
 //! The profile editor's "Mounts & Run" tab: the run command plus a dynamic list
 //! of drive mounts.
+//!
+//! Slightly over the 150-line soft cap: the dynamic add/remove mount-row
+//! machinery is kept together with the tab it serves.
 
 use std::cell::RefCell;
 use std::path::PathBuf;

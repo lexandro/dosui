@@ -4,6 +4,8 @@
 //! produce a `dosbox.conf`. We parse the `[autoexec]` block into mounts + a run
 //! command, map the keys we model into a typed [`DosboxConfig`], and keep the
 //! rest as passthrough. Best-effort and fully GTK-free, so it is unit-testable.
+//!
+//! Over the 150-line soft cap by design: the parser plus its inline tests.
 
 use indexmap::IndexMap;
 
