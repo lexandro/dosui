@@ -1,16 +1,19 @@
-//! The main application window: profile list (left) + detail/Play (right).
+//! The main application window: cover grid (left) + detail/Play (right).
 //!
-//! Two-pane shell for now: pick a profile, Play, or Edit/create profiles. The
-//! category sidebar and cover grid arrive in later milestones (plan §2.5).
+//! The grid is a `GridView` over a `ListStore` of profiles (boxed), mirroring the
+//! `profiles` Vec order so the selected position indexes straight into it. Pick a
+//! profile, Play, or Edit/create profiles.
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+use gtk::glib::BoxedAnyObject;
 use gtk::prelude::*;
 use gtk::{
-    gio, AlertDialog, Application, ApplicationWindow, Box as GtkBox, Button, ContentFit, HeaderBar,
-    Label, ListBox, Orientation, Paned, Picture, ScrolledWindow, SearchEntry, SelectionMode,
+    gio, AlertDialog, Application, ApplicationWindow, Box as GtkBox, Button, ContentFit, GridView,
+    HeaderBar, Label, ListItem, Orientation, Paned, Picture, ScrolledWindow, SearchEntry,
+    SignalListItemFactory, SingleSelection,
 };
 
 use crate::app::APP_NAME;
@@ -21,10 +24,11 @@ use crate::ui::profile_editor;
 /// Loaded profile together with its on-disk directory (needed to launch).
 type Entry = (PathBuf, Profile);
 
-/// Shared, reloadable profile list backing the ListBox rows by index.
+/// Shared, reloadable profile list. The grid's ListStore mirrors this order, so
+/// the selected position is an index into it.
 type Profiles = Rc<RefCell<Vec<Entry>>>;
 
-/// Widgets in the detail pane whose text changes with the selection.
+/// Widgets in the detail pane whose contents change with the selection.
 #[derive(Clone)]
 struct Detail {
     container: GtkBox,
@@ -43,61 +47,59 @@ pub fn build(app: &Application) {
     let window = ApplicationWindow::builder()
         .application(app)
         .title(APP_NAME)
-        .default_width(900)
-        .default_height(580)
+        .default_width(940)
+        .default_height(600)
         .build();
     let header = build_header();
     window.set_titlebar(Some(&header.bar));
 
-    let list = ListBox::new();
-    list.set_selection_mode(SelectionMode::Single);
-    populate(&list, &profiles.borrow());
-    let list_scroller = ScrolledWindow::builder()
-        .child(&list)
-        .width_request(260)
+    let store = gio::ListStore::new::<BoxedAnyObject>();
+    fill_store(&store, &profiles.borrow());
+    let selection = SingleSelection::new(Some(store.clone()));
+    let grid = GridView::builder()
+        .model(&selection)
+        .factory(&build_factory())
+        .max_columns(8)
+        .min_columns(2)
+        .build();
+    let grid_scroller = ScrolledWindow::builder()
+        .child(&grid)
+        .width_request(360)
         .build();
 
     let detail = build_detail();
-
-    // Reloads the list from disk and reselects the first row (used after edits).
-    let reload = make_reload(&list, &profiles, &detail);
 
     // Selection -> refresh the detail pane.
     {
         let profiles = profiles.clone();
         let detail = detail.clone();
-        list.connect_row_selected(move |_, row| match row {
-            Some(row) => {
-                if let Some((dir, profile)) = profiles.borrow().get(row.index() as usize) {
-                    show_profile(&detail, dir, profile);
-                }
-            }
-            None => clear_detail(&detail),
+        selection.connect_selected_notify(move |sel| {
+            refresh_detail(sel, &profiles, &detail);
         });
     }
 
-    // Every button maps to a GAction. This keeps one source of truth for each
-    // command, gives keyboard accelerators, and — crucially — makes the app
-    // driveable from outside (e.g. `gapplication action io.github.dosui play`)
-    // so behaviour can be tested without hunting for on-screen pixels.
-    install_actions(app, &window, &list, &profiles, &reload);
+    // Rebuilds the store from disk and reselects the first item (used after edits).
+    let reload = make_reload(&store, &profiles, &selection, &detail);
+
+    // Buttons route through GActions: single source of truth, accelerators, and
+    // external testability (`gapplication action io.github.dosui play`).
+    install_actions(app, &window, &selection, &profiles, &reload);
     detail.play.set_action_name(Some("app.play"));
     detail.edit.set_action_name(Some("app.edit"));
     header.new_profile.set_action_name(Some("app.new"));
     header.settings.set_action_name(Some("app.settings"));
 
-    // Double-click / Enter on a row -> Play (D-Fend behaviour).
-    list.connect_row_activated(|list, _| {
-        let _ = WidgetExt::activate_action(list, "app.play", None);
+    // Double-click / Enter on a cover -> Play.
+    grid.connect_activate(|grid, _| {
+        let _ = WidgetExt::activate_action(grid, "app.play", None);
     });
 
-    // Pre-select the first profile so the detail pane is populated on start.
-    select_first(&list, &detail);
+    select_first(&selection, &profiles, &detail);
 
     let root = Paned::builder()
         .orientation(Orientation::Horizontal)
-        .position(260)
-        .start_child(&list_scroller)
+        .position(360)
+        .start_child(&grid_scroller)
         .end_child(&detail.container)
         .build();
     window.set_child(Some(&root));
@@ -105,24 +107,76 @@ pub fn build(app: &Application) {
     window.present();
 }
 
-/// Register the `play` / `edit` / `new` app actions and their accelerators.
-/// Buttons and the row-activated gesture all route through these, so there is a
-/// single implementation per command and it can be triggered externally.
+/// Build the factory that renders each grid cell (cover thumbnail + title).
+fn build_factory() -> SignalListItemFactory {
+    let factory = SignalListItemFactory::new();
+
+    factory.connect_setup(|_, item| {
+        let item = item.downcast_ref::<ListItem>().expect("ListItem");
+        let cover = Picture::builder()
+            .content_fit(ContentFit::Contain)
+            .width_request(150)
+            .height_request(110)
+            .build();
+        let title = Label::builder()
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .max_width_chars(20)
+            .build();
+        let cell = GtkBox::builder()
+            .orientation(Orientation::Vertical)
+            .spacing(4)
+            .margin_top(6)
+            .margin_bottom(6)
+            .margin_start(6)
+            .margin_end(6)
+            .build();
+        cell.append(&cover);
+        cell.append(&title);
+        item.set_child(Some(&cell));
+    });
+
+    factory.connect_bind(|_, item| {
+        let item = item.downcast_ref::<ListItem>().expect("ListItem");
+        let Some(cell) = item.child().and_downcast::<GtkBox>() else {
+            return;
+        };
+        let Some(cover) = cell.first_child().and_downcast::<Picture>() else {
+            return;
+        };
+        let Some(title) = cover.next_sibling().and_downcast::<Label>() else {
+            return;
+        };
+        let Some(obj) = item.item().and_downcast::<BoxedAnyObject>() else {
+            return;
+        };
+        let entry = obj.borrow::<Entry>();
+        let (dir, profile) = &*entry;
+        title.set_text(&profile.title);
+        match cover_path(dir, profile) {
+            Some(p) if p.exists() => cover.set_filename(p.to_str()),
+            _ => cover.set_filename(None::<&str>),
+        }
+    });
+
+    factory
+}
+
+/// Register the `play` / `edit` / `new` / `settings` actions and accelerators.
 fn install_actions(
     app: &Application,
     window: &ApplicationWindow,
-    list: &ListBox,
+    selection: &SingleSelection,
     profiles: &Profiles,
     reload: &Rc<dyn Fn()>,
 ) {
     let play = gio::SimpleAction::new("play", None);
     {
         let profiles = profiles.clone();
+        let selection = selection.clone();
         let window = window.downgrade();
-        let list = list.clone();
         play.connect_activate(move |_, _| {
-            if let Some(row) = list.selected_row() {
-                launch_entry(&profiles.borrow(), window.upgrade(), row.index() as usize);
+            if let Some(i) = selected_index(&selection) {
+                launch_entry(&profiles.borrow(), window.upgrade(), i);
             }
         });
     }
@@ -131,14 +185,14 @@ fn install_actions(
     let edit = gio::SimpleAction::new("edit", None);
     {
         let profiles = profiles.clone();
+        let selection = selection.clone();
         let window = window.downgrade();
-        let list = list.clone();
         let reload = reload.clone();
         edit.connect_activate(move |_, _| {
-            let Some(row) = list.selected_row() else {
+            let Some(i) = selected_index(&selection) else {
                 return;
             };
-            let (dir, prof) = match profiles.borrow().get(row.index() as usize) {
+            let (dir, prof) = match profiles.borrow().get(i) {
                 Some((dir, prof)) => (dir.clone(), prof.clone()),
                 None => return,
             };
@@ -178,46 +232,59 @@ fn install_actions(
     app.set_accels_for_action("app.settings", &["<Ctrl>comma"]);
 }
 
-/// Build a callback that rescans profiles and rebuilds the list.
-fn make_reload(list: &ListBox, profiles: &Profiles, detail: &Detail) -> Rc<dyn Fn()> {
-    let list = list.clone();
+/// Build a callback that rescans profiles and rebuilds the grid.
+fn make_reload(
+    store: &gio::ListStore,
+    profiles: &Profiles,
+    selection: &SingleSelection,
+    detail: &Detail,
+) -> Rc<dyn Fn()> {
+    let store = store.clone();
     let profiles = profiles.clone();
+    let selection = selection.clone();
     let detail = detail.clone();
     Rc::new(move || {
         *profiles.borrow_mut() = load_profiles();
-        clear_list(&list);
-        populate(&list, &profiles.borrow());
-        select_first(&list, &detail);
+        fill_store(&store, &profiles.borrow());
+        select_first(&selection, &profiles, &detail);
     })
 }
 
-/// Append a row per profile.
-fn populate(list: &ListBox, profiles: &[Entry]) {
-    for (_, profile) in profiles {
-        list.append(&profile_row(profile));
+/// Replace the store's contents with one boxed entry per profile.
+fn fill_store(store: &gio::ListStore, profiles: &[Entry]) {
+    store.remove_all();
+    for entry in profiles {
+        store.append(&BoxedAnyObject::new(entry.clone()));
     }
 }
 
-/// Remove all rows from the list.
-fn clear_list(list: &ListBox) {
-    while let Some(row) = list.row_at_index(0) {
-        list.remove(&row);
+/// Index of the current selection, or `None` when nothing is selected.
+fn selected_index(selection: &SingleSelection) -> Option<usize> {
+    let pos = selection.selected();
+    if pos == gtk::INVALID_LIST_POSITION {
+        None
+    } else {
+        Some(pos as usize)
     }
 }
 
-/// Select the first row (populating the detail pane), or clear it if empty.
-fn select_first(list: &ListBox, detail: &Detail) {
-    match list.row_at_index(0) {
-        Some(first) => {
-            list.select_row(Some(&first));
-            first.grab_focus();
-        }
+/// Select the first item (populating the detail pane), or clear it if empty.
+fn select_first(selection: &SingleSelection, profiles: &Profiles, detail: &Detail) {
+    if selection.n_items() > 0 {
+        selection.set_selected(0);
+    }
+    refresh_detail(selection, profiles, detail);
+}
+
+/// Update the detail pane to reflect the current selection.
+fn refresh_detail(selection: &SingleSelection, profiles: &Profiles, detail: &Detail) {
+    match selected_index(selection).and_then(|i| profiles.borrow().get(i).cloned()) {
+        Some((dir, profile)) => show_profile(detail, &dir, &profile),
         None => clear_detail(detail),
     }
 }
 
 /// Launch the profile at `index`, reporting failures in a dialog.
-/// Shared by the Play button and row activation (double-click / Enter).
 fn launch_entry(profiles: &[Entry], window: Option<ApplicationWindow>, index: usize) {
     let Some((dir, profile)) = profiles.get(index) else {
         return;
@@ -274,18 +341,6 @@ fn build_header() -> Header {
         new_profile,
         settings,
     }
-}
-
-/// One list row: the profile title.
-fn profile_row(profile: &Profile) -> Label {
-    Label::builder()
-        .label(&profile.title)
-        .halign(gtk::Align::Start)
-        .margin_top(8)
-        .margin_bottom(8)
-        .margin_start(10)
-        .margin_end(10)
-        .build()
 }
 
 /// Build the detail pane (empty state until a profile is selected).
@@ -403,7 +458,7 @@ fn set_cover(detail: &Detail, path: Option<&Path>) {
     }
 }
 
-/// "Last played: …" line, or empty if never played.
+/// "Last played: …" line, or "Never played".
 fn last_played_line(profile: &Profile) -> String {
     match profile.last_played {
         Some(then) => format!(
