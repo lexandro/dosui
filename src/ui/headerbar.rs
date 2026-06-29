@@ -58,12 +58,24 @@ pub(crate) fn build_menubar() -> PopoverMenuBar {
 
     let menu = gio::Menu::new();
     menu.append_submenu(Some("File"), &file);
+    menu.append_submenu(Some("View"), &build_view_menu());
     menu.append_submenu(Some("Profile"), &build_profile_menu());
     menu.append_submenu(Some("Tools"), &tools);
     menu.append_submenu(Some("Settings"), &settings);
     menu.append_submenu(Some("Help"), &help);
 
     PopoverMenuBar::from_model(Some(&menu))
+}
+
+/// The View menu: switch the games list between the details and icons modes.
+fn build_view_menu() -> gio::Menu {
+    let menu = gio::Menu::new();
+    for (label, mode) in [("Details", "details"), ("Icons", "icons")] {
+        let item = gio::MenuItem::new(Some(label), None);
+        item.set_action_and_target_value(Some("app.view-mode"), Some(&mode.to_variant()));
+        menu.append_item(&item);
+    }
+    menu
 }
 
 /// The profile command menu, reused by the menu bar and the grid context menu.

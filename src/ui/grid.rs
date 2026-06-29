@@ -1,5 +1,5 @@
-//! The cover `GridView` factory: renders each cell (cover + title) and wires the
-//! secondary-click context menu.
+//! The cover `GridView` factory (the "Icons" view mode): renders each cell
+//! (cover + title) and wires the secondary-click context menu.
 
 use gtk::glib::BoxedAnyObject;
 use gtk::prelude::*;
@@ -8,8 +8,9 @@ use gtk::{
     SignalListItemFactory, SingleSelection,
 };
 
-use crate::ui::detail::{apply_cover, display_title};
+use crate::ui::display::{apply_cover, display_title};
 use crate::ui::library::Entry;
+use crate::ui::row_menu;
 
 /// Build the factory for the grid, given the selection (for click-to-select),
 /// the grid (to anchor the menu), and the shared context menu.
@@ -45,7 +46,7 @@ pub(crate) fn build_factory(
         cell.append(&cover);
         cell.append(&title);
         item.set_child(Some(&cell));
-        wire_context_menu(item, &cell, &selection, &grid, &menu);
+        row_menu::wire(item, &cell, &selection, &grid, &menu);
     });
 
     factory.connect_bind(|_, item| {
@@ -69,36 +70,4 @@ pub(crate) fn build_factory(
     });
 
     factory
-}
-
-/// Secondary-click on a cell selects it and opens the context menu at the pointer.
-fn wire_context_menu(
-    item: &ListItem,
-    cell: &GtkBox,
-    selection: &SingleSelection,
-    grid: &GridView,
-    menu: &PopoverMenu,
-) {
-    let gesture = gtk::GestureClick::new();
-    gesture.set_button(gtk::gdk::BUTTON_SECONDARY);
-    let selection = selection.clone();
-    let grid = grid.clone();
-    let menu = menu.clone();
-    let item = item.clone();
-    let cell_click = cell.clone();
-    gesture.connect_pressed(move |gesture, _, x, y| {
-        let pos = item.position();
-        if pos != gtk::INVALID_LIST_POSITION {
-            selection.set_selected(pos);
-        }
-        let point = gtk::graphene::Point::new(x as f32, y as f32);
-        let (gx, gy) = cell_click
-            .compute_point(&grid, &point)
-            .map(|p| (p.x() as i32, p.y() as i32))
-            .unwrap_or((x as i32, y as i32));
-        menu.set_pointing_to(Some(&gtk::gdk::Rectangle::new(gx, gy, 1, 1)));
-        menu.popup();
-        gesture.set_state(gtk::EventSequenceState::Claimed);
-    });
-    cell.add_controller(gesture);
 }
