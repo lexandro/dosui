@@ -17,15 +17,15 @@ exclude = ["/docs", "/packaging", "/.github", "/data/*.png"]
 gtk = { package = "gtk4", version = "0.9", features = ["v4_12"] }
 
 serde = { version = "1", features = ["derive"] }
-toml = "0.8"
+toml = "1.1"
 indexmap = { version = "2", features = ["serde"] }
 
-directories = "5"
-which = "6"
-zip = "2"
+directories = "6"
+which = "8"
+zip = "8"
 
 anyhow = "1"
-thiserror = "1"
+thiserror = "2"
 
 log = "0.4"
 env_logger = "0.11"
