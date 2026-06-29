@@ -1,32 +1,31 @@
-# --- OS ---
+# Rust build output
+/target/
+
+# Packaging output (AppImage build)
+/dist/
+*.AppImage
+
+# Backup files
+**/*.rs.bk
+
+# OS
 .DS_Store
 Thumbs.db
 
-# --- Editorok / IDE ---
+# Editors / IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# --- Build / kimenet (nyelv eldöntése után bővítjük) ---
-/build/
-/dist/
-/target/        # Rust / egyéb
-/bin/
-/obj/
-*.o
-*.out
-
-# --- Logok, ideiglenes ---
+# Logs / temp
 *.log
 *.tmp
 
-# --- Helyi környezet ---
+# Local environment
 .env
 .env.local
 
-# --- Nyelv-specifikus (aktiváljuk amikor eldől) ---
-# Go:     /vendor/
-# Python: __pycache__/  *.pyc  .venv/
-# Node:   node_modules/
+# Note: Cargo.lock is committed on purpose — dosui ships as a binary, so we pin
+# the exact dependency versions for reproducible builds.

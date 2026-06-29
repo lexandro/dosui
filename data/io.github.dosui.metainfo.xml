@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2026 lexandro2000 -->
+<component type="desktop-application">
+  <id>io.github.dosui</id>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <name>dosui</name>
+  <summary>Lightweight native frontend for DOSBox</summary>
+
+  <description>
+    <p>
+      dosui is a lightweight, native Linux frontend for DOSBox — a game and
+      profile launcher and configuration manager in the spirit of D-Fend
+      Reloaded, but without a Java runtime.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Profile library with cover art, a sortable details list, and an icon view.</li>
+      <li>Tabbed profile editor with a live dosbox.conf preview.</li>
+      <li>New-profile wizard that scans a folder for executables.</li>
+      <li>Global defaults with per-profile overrides.</li>
+      <li>Category sidebar and find-as-you-type search.</li>
+      <li>Import from dosbox.conf (D-Fend / DBGL) and zipped games.</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">io.github.dosui.desktop</launchable>
+
+  <url type="homepage">https://github.com/lexandro2000/dosui</url>
+  <url type="bugtracker">https://github.com/lexandro2000/dosui/issues</url>
+  <url type="vcs-browser">https://github.com/lexandro2000/dosui</url>
+
+  <developer id="io.github.lexandro2000">
+    <name>lexandro2000</name>
+  </developer>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>The dosui main window</caption>
+      <image>https://raw.githubusercontent.com/lexandro2000/dosui/main/docs/screenshot.png</image>
+    </screenshot>
+  </screenshots>
+
+  <categories>
+    <category>Game</category>
+    <category>Emulator</category>
+  </categories>
+
+  <keywords>
+    <keyword>DOS</keyword>
+    <keyword>DOSBox</keyword>
+    <keyword>games</keyword>
+    <keyword>emulator</keyword>
+    <keyword>retro</keyword>
+  </keywords>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="0.1.0" date="2026-06-28">
+      <description>
+        <p>Initial working frontend.</p>
+      </description>
+    </release>
+  </releases>
+</component>

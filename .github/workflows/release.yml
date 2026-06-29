@@ -1,0 +1,67 @@
+name: Release
+
+# Builds the bundled AppImage and attaches it to the GitHub Release.
+# Triggered by pushing a version tag (e.g. v0.2.0), or manually.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  # Pin the dosbox-staging build bundled into the AppImage. Bump on upgrade.
+  DOSBOX_STAGING_VERSION: "0.82.0"
+
+jobs:
+  appimage:
+    name: Build AppImage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential libgtk-4-dev librsvg2-common file curl
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Fetch dosbox-staging
+        id: dosbox
+        run: |
+          set -euo pipefail
+          ver="${DOSBOX_STAGING_VERSION}"
+          url="https://github.com/dosbox-staging/dosbox-staging/releases/download/v${ver}/dosbox-staging-linux-x86_64-v${ver}.tar.xz"
+          mkdir -p "$HOME/.local/opt/dosbox-extract"
+          echo "Downloading $url"
+          curl -fsSL -o /tmp/dosbox.tar.xz "$url"
+          tar -xf /tmp/dosbox.tar.xz -C "$HOME/.local/opt/dosbox-extract"
+          # Locate the directory that holds the dosbox binary + resources.
+          dir="$(dirname "$(find "$HOME/.local/opt/dosbox-extract" -type f -name dosbox -perm -u+x | head -1)")"
+          test -n "$dir" && test -x "$dir/dosbox"
+          echo "DOSBOX_STAGING_DIR=$dir" >> "$GITHUB_ENV"
+          echo "Found dosbox-staging in $dir"
+
+      - name: Build AppImage
+        run: ./packaging/build-appimage.sh
+
+      - name: Upload AppImage to the release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: dist/dosui*.AppImage
+          generate_release_notes: true
+
+      - name: Upload AppImage as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dosui-AppImage
+          path: dist/dosui*.AppImage

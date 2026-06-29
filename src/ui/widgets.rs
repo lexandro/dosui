@@ -6,8 +6,7 @@
 
 use gtk::prelude::*;
 use gtk::{
-    Align, Box as GtkBox, Button, CheckButton, DropDown, Entry, Label, Orientation, SpinButton,
-    TextView,
+    Align, Box as GtkBox, Button, CheckButton, DropDown, Entry, Label, Orientation, TextView,
 };
 
 const LABEL_WIDTH: i32 = 150;
@@ -56,13 +55,6 @@ pub fn check_row(label: &str, active: bool) -> (GtkBox, CheckButton) {
         .build();
     row.append(&check);
     (row, check)
-}
-
-/// Integer spin row.
-pub fn spin_row(label: &str, min: f64, max: f64, step: f64, value: f64) -> (GtkBox, SpinButton) {
-    let spin = SpinButton::with_range(min, max, step);
-    spin.set_value(value);
-    (labeled(label, &spin), spin)
 }
 
 /// File/folder picker row: a path entry plus a "Browse…" button. The caller

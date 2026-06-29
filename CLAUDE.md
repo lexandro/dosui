@@ -4,7 +4,8 @@ Lightweight **native Linux frontend for DOSBox**, D-Fend Reloaded style.
 Stack: **Rust + GTK4 (`gtk4-rs`, no libadwaita)**. Engine: dosbox-staging (path from
 config). Target: Linux Mint / Cinnamon / X11. Ship: single AppImage with bundled dosbox.
 
-Full design + milestones: `~/.claude/plans/mutable-weaving-starlight.md`.
+Architecture overview: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Contributor
+guide: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Commands
 ```

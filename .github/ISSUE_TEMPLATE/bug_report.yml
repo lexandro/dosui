@@ -1,0 +1,53 @@
+name: Bug report
+description: Report a problem with dosui
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to file a bug! Please fill in the details below.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, including what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open dosui
+        2. ...
+        3. See error
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: dosui version
+      description: Release tag, or commit hash if built from source.
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install dosui?
+      options:
+        - AppImage
+        - Built from source
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Distro & GTK version
+      description: "e.g. Linux Mint 22 / GTK 4.14 (pkg-config --modversion gtk4)"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Output of `RUST_LOG=debug dosui` around the failure, if any.
+      render: shell
