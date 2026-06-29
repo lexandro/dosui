@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Project documentation and community health files (README, CONTRIBUTING,
   CODE_OF_CONDUCT, SECURITY, this changelog), CI, issue/PR templates, and an
   AppStream metainfo file.
+- `Makefile` with `build` / `run` / `check` / `install` / `uninstall` /
+  `appimage` targets (honours `PREFIX` and `DESTDIR`).
+- Tag-driven AppImage release pipeline that publishes the AppImage and
+  `SHA256SUMS`; the AppImage build script now auto-downloads a pinned
+  dosbox-staging when no local build is present. See `docs/RELEASING.md`.
+- Multi-distro build-from-source instructions (Debian/Ubuntu/Mint, Fedora, Arch,
+  openSUSE).
 
 ### Changed
 - README rewritten in English with install/usage/packaging sections.

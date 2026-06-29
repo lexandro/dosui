@@ -57,21 +57,34 @@ DOSBox is required. It still follows your desktop's GTK theme.
 
 ### From source
 
-Prerequisites (Debian / Ubuntu / Linux Mint):
+You need a stable **Rust toolchain** (MSRV 1.80 — see `rust-version` in
+[`Cargo.toml`](Cargo.toml); install via [rustup](https://rustup.rs/)) and the
+**GTK 4 development libraries**.
+
+Install the build dependencies for your distro:
+
+| Distro                | Command                                                                  |
+| --------------------- | ------------------------------------------------------------------------ |
+| Debian / Ubuntu / Mint| `sudo apt install build-essential libgtk-4-dev librsvg2-common`           |
+| Fedora                | `sudo dnf install gcc gtk4-devel librsvg2`                                |
+| Arch / Manjaro        | `sudo pacman -S --needed base-devel gtk4 librsvg`                         |
+| openSUSE              | `sudo zypper install gcc gtk4-devel librsvg-2`                            |
+
+Then build, run, and (optionally) install. A [`Makefile`](Makefile) wraps the
+common tasks:
 
 ```sh
-sudo apt install build-essential libgtk-4-dev librsvg2-common
+make            # build the release binary (target/release/dosui)
+make run        # run from source
+make check      # fmt + clippy + test (the same gate CI runs)
+sudo make install            # install into /usr/local (binary, .desktop, icon, metainfo)
+sudo make install PREFIX=/usr  # or pick a prefix; honours DESTDIR for packaging
+sudo make uninstall          # remove it again
 ```
 
-Then build and run with a stable Rust toolchain (see
-[`rust-toolchain`](Cargo.toml), MSRV 1.80):
-
-```sh
-cargo run --release
-```
-
-A system `dosbox-staging` (or `dosbox`) on your `PATH` is used when running from
-source; you can also point dosui at a specific binary in **Settings**.
+Prefer plain Cargo? `cargo run --release` works too. When running from source,
+dosui uses a `dosbox-staging` (or `dosbox`) found on your `PATH`; you can also
+point it at a specific binary in **Settings**.
 
 ## Usage
 
@@ -97,13 +110,17 @@ artifact — never a source of truth.
 ## Packaging an AppImage
 
 ```sh
-./packaging/build-appimage.sh      # -> dist/dosui-x86_64.AppImage
+make appimage          # or: ./packaging/build-appimage.sh   -> dist/dosui-x86_64.AppImage
 ```
 
-The script bundles `dosbox-staging` and the GTK runtime. It looks for an
-extracted dosbox-staging build under `~/.local/opt/dosbox-staging*` (override
-with `DOSBOX_STAGING_DIR`). The bundled `dosbox-staging` is GPL-2.0-or-later and
-is shipped as a separate program (mere aggregation) — dosui's own code is MIT.
+The script bundles `dosbox-staging` and the GTK runtime. It uses a local
+dosbox-staging build if one is under `~/.local/opt/dosbox-staging*` (override
+with `DOSBOX_STAGING_DIR`), otherwise it downloads a pinned version
+(`DOSBOX_STAGING_VERSION`). The same script runs in the tag-driven
+[Release workflow](.github/workflows/release.yml) — see
+[docs/RELEASING.md](docs/RELEASING.md). The bundled `dosbox-staging` is
+GPL-2.0-or-later and ships as a separate program (mere aggregation); dosui's own
+code is MIT.
 
 ## Contributing
 

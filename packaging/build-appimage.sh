@@ -6,9 +6,13 @@
 # app follows the host theme (e.g. Mint-Y) on the target machine.
 #
 # Env overrides:
-#   DOSBOX_STAGING_DIR  path to an extracted dosbox-staging (default: newest in ~/.local/opt)
-#   DOSUI_TOOLS         cache dir for linuxdeploy tools (default: ~/.local/opt)
+#   DOSBOX_STAGING_DIR      path to an extracted dosbox-staging (skips the search/download)
+#   DOSBOX_STAGING_VERSION  version to download if none is found locally (default below)
+#   DOSUI_TOOLS             cache dir for linuxdeploy tools + dosbox (default: ~/.local/opt)
 set -euo pipefail
+
+# Pinned dosbox-staging version, downloaded only when no local build is found.
+DOSBOX_STAGING_VERSION="${DOSBOX_STAGING_VERSION:-0.82.0}"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DIST="$ROOT/dist"
@@ -19,10 +23,39 @@ export APPIMAGE_EXTRACT_AND_RUN=1 # run the tool AppImages without FUSE
 
 log() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 
-# 1. Locate dosbox-staging (binary + resources).
-DOSBOX_DIR="${DOSBOX_STAGING_DIR:-$(find "$HOME/.local/opt" -maxdepth 1 -type d -iname 'dosbox-staging*' | sort | tail -1)}"
+# 1. Locate dosbox-staging (binary + resources), downloading a pinned build if
+#    none is found. The directory holding the `dosbox` executable is what we need.
+find_dosbox_dir() {
+    local root="$1" bin
+    [ -d "$root" ] || return 0
+    bin="$(find "$root" -maxdepth 3 -type f -name dosbox -perm -u+x 2>/dev/null | sort | tail -1)"
+    [ -n "$bin" ] && dirname "$bin"
+}
+
+if [ -n "${DOSBOX_STAGING_DIR:-}" ] && [ -x "$DOSBOX_STAGING_DIR/dosbox" ]; then
+    DOSBOX_DIR="$DOSBOX_STAGING_DIR"
+else
+    DOSBOX_DIR="$(find_dosbox_dir "$HOME/.local/opt")"
+fi
+
+if [ -z "${DOSBOX_DIR:-}" ]; then
+    ver="$DOSBOX_STAGING_VERSION"
+    cache="$TOOLS/dosbox-staging-v$ver"
+    DOSBOX_DIR="$(find_dosbox_dir "$cache")"
+    if [ -z "$DOSBOX_DIR" ]; then
+        log "downloading dosbox-staging v$ver"
+        mkdir -p "$cache"
+        tarball="dosbox-staging-linux-x86_64-v$ver.tar.xz"
+        curl -fsSL -o "$cache/$tarball" \
+            "https://github.com/dosbox-staging/dosbox-staging/releases/download/v$ver/$tarball"
+        tar -xf "$cache/$tarball" -C "$cache"
+        DOSBOX_DIR="$(find_dosbox_dir "$cache")"
+    fi
+fi
+
 if [ -z "${DOSBOX_DIR:-}" ] || [ ! -x "$DOSBOX_DIR/dosbox" ]; then
-    echo "dosbox-staging not found. Set DOSBOX_STAGING_DIR to an extracted build." >&2
+    echo "dosbox-staging not found and the download failed." >&2
+    echo "Set DOSBOX_STAGING_DIR to an extracted build, or check your network." >&2
     exit 1
 fi
 log "dosbox-staging: $DOSBOX_DIR"
