@@ -11,7 +11,7 @@ use gtk::glib::BoxedAnyObject;
 use gtk::prelude::*;
 use gtk::{
     gio, Application, ApplicationWindow, Box as GtkBox, FilterChange, FilterListModel, Orientation,
-    Paned, SingleSelection,
+    Paned, SingleSelection, SortListModel,
 };
 
 use crate::app::APP_NAME;
@@ -42,7 +42,9 @@ pub fn build(app: &Application) {
     let active_category = Rc::new(RefCell::new(Category::All));
     let filter = library::build_filter(&query, &active_category);
     let filter_model = FilterListModel::new(Some(store.clone()), Some(filter.clone()));
-    let selection = SingleSelection::new(Some(filter_model));
+    // The selection's backing model is wired below, once the details view exists:
+    // store → filter → sort (by the list's clicked column) → selection.
+    let selection = SingleSelection::new(None::<gio::ListModel>);
 
     let sidebar = Rc::new({
         let filter = filter.clone();
@@ -52,6 +54,8 @@ pub fn build(app: &Application) {
     sidebar.rebuild(&profiles.borrow());
 
     let games = games_view::build(&selection);
+    let sort_model = SortListModel::new(Some(filter_model), games.list_sorter());
+    selection.set_model(Some(&sort_model));
     let preview = preview::build();
     {
         let preview = preview.clone();

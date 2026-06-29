@@ -4,21 +4,23 @@
 
 use gtk::glib;
 use gtk::prelude::*;
-use gtk::{gio, Application, GridView, PopoverMenu, ScrolledWindow, SingleSelection, Stack};
+use gtk::{
+    gio, Application, ColumnView, GridView, PopoverMenu, ScrolledWindow, SingleSelection, Sorter,
+    Stack,
+};
 
 use crate::ui::headerbar;
 use crate::ui::{grid, list_view};
 
 pub(crate) struct GamesView {
     pub stack: Stack,
+    list: ColumnView,
 }
 
 /// Build the stack with the details list (default) and the icon grid.
 pub(crate) fn build(selection: &SingleSelection) -> GamesView {
-    let list_scroller = ScrolledWindow::builder()
-        .child(&build_list(selection))
-        .vexpand(true)
-        .build();
+    let list = build_list(selection);
+    let list_scroller = ScrolledWindow::builder().child(&list).vexpand(true).build();
     let grid_scroller = ScrolledWindow::builder()
         .child(&build_grid(selection))
         .vexpand(true)
@@ -28,7 +30,15 @@ pub(crate) fn build(selection: &SingleSelection) -> GamesView {
     stack.add_named(&list_scroller, Some("details"));
     stack.add_named(&grid_scroller, Some("icons"));
     stack.set_visible_child_name("details");
-    GamesView { stack }
+    GamesView { stack, list }
+}
+
+impl GamesView {
+    /// The details view's header sorter — wire a `SortListModel` to it so column
+    /// clicks reorder the list. Unsorted until a header is clicked.
+    pub(crate) fn list_sorter(&self) -> Option<Sorter> {
+        self.list.sorter()
+    }
 }
 
 /// The details `ColumnView` with its own context menu, Enter/double-click → Run.

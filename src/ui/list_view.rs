@@ -1,13 +1,19 @@
 //! The details `ColumnView` (the "Details" view mode): one row per profile with
-//! sortable-looking columns Title · Genre · Year · Developer · Publisher · Last
+//! click-to-sort columns Title · Genre · Year · Developer · Publisher · Last
 //! played, D-Fend style. Shares the window's `SingleSelection` with the icon
-//! grid so switching view modes keeps the selection.
+//! grid so switching view modes keeps the selection; the window wires a
+//! `SortListModel` to this view's [`ColumnView::sorter`] to apply header sorts.
+//!
+//! Over the 150-line soft cap by design: one cohesive widget — the column
+//! definitions plus their per-column cell factories and sorters belong together.
 
-use gtk::glib::BoxedAnyObject;
+use std::rc::Rc;
+
+use gtk::glib::{self, BoxedAnyObject};
 use gtk::prelude::*;
 use gtk::{
-    Box as GtkBox, ColumnView, ColumnViewColumn, ContentFit, Label, ListItem, Orientation, Picture,
-    PopoverMenu, SignalListItemFactory, SingleSelection,
+    Box as GtkBox, ColumnView, ColumnViewColumn, ContentFit, CustomSorter, Label, ListItem,
+    Orientation, Picture, PopoverMenu, SignalListItemFactory, SingleSelection,
 };
 
 use crate::config::profile::Profile;
@@ -23,24 +29,41 @@ pub(crate) fn build(selection: &SingleSelection, menu: &PopoverMenu) -> ColumnVi
         .build();
 
     view.append_column(&title_column(selection, &view, menu));
-    view.append_column(&text_column("Genre", false, |p| {
-        p.genre.clone().unwrap_or_default()
-    }));
-    view.append_column(&text_column("Year", false, |p| {
-        p.year.map(|y| y.to_string()).unwrap_or_default()
-    }));
-    view.append_column(&text_column("Developer", true, |p| {
-        p.developer.clone().unwrap_or_default()
-    }));
-    view.append_column(&text_column("Publisher", true, |p| {
-        p.publisher.clone().unwrap_or_default()
-    }));
-    view.append_column(&text_column("Last played", false, last_played_cell));
+    view.append_column(&column(
+        "Genre",
+        false,
+        Rc::new(|p| p.genre.clone().unwrap_or_default()),
+        string_sorter(Rc::new(|p| p.genre.clone().unwrap_or_default())),
+    ));
+    view.append_column(&column(
+        "Year",
+        false,
+        Rc::new(|p| p.year.map(|y| y.to_string()).unwrap_or_default()),
+        num_sorter(|p| p.year.unwrap_or(0) as u64),
+    ));
+    view.append_column(&column(
+        "Developer",
+        true,
+        Rc::new(|p| p.developer.clone().unwrap_or_default()),
+        string_sorter(Rc::new(|p| p.developer.clone().unwrap_or_default())),
+    ));
+    view.append_column(&column(
+        "Publisher",
+        true,
+        Rc::new(|p| p.publisher.clone().unwrap_or_default()),
+        string_sorter(Rc::new(|p| p.publisher.clone().unwrap_or_default())),
+    ));
+    view.append_column(&column(
+        "Last played",
+        false,
+        Rc::new(last_played_cell),
+        num_sorter(|p| p.last_played.unwrap_or(0)),
+    ));
     view
 }
 
 /// The leftmost column: a small cover/console icon plus the (starred) title,
-/// and the row's secondary-click context menu.
+/// the row's secondary-click context menu, and a title sorter.
 fn title_column(
     selection: &SingleSelection,
     view: &ColumnView,
@@ -95,14 +118,16 @@ fn title_column(
     let column = ColumnViewColumn::new(Some("Title"), Some(factory));
     column.set_expand(true);
     column.set_resizable(true);
+    column.set_sorter(Some(&string_sorter(Rc::new(|p| p.title.clone()))));
     column
 }
 
-/// A plain text column whose cell text comes from `get(profile)`.
-fn text_column(
+/// A plain text column: `display` fills each cell, `sorter` orders the header.
+fn column(
     title: &str,
     expand: bool,
-    get: impl Fn(&Profile) -> String + 'static,
+    display: Rc<dyn Fn(&Profile) -> String>,
+    sorter: CustomSorter,
 ) -> ColumnViewColumn {
     let factory = SignalListItemFactory::new();
     factory.connect_setup(|_, item| {
@@ -122,11 +147,42 @@ fn text_column(
             return;
         };
         let entry = obj.borrow::<Entry>();
-        label.set_text(&get(&entry.1));
+        label.set_text(&display(&entry.1));
     });
 
     let column = ColumnViewColumn::new(Some(title), Some(factory));
     column.set_expand(expand);
     column.set_resizable(true);
+    column.set_sorter(Some(&sorter));
     column
+}
+
+/// Case-insensitive sorter on a string key.
+fn string_sorter(key: Rc<dyn Fn(&Profile) -> String>) -> CustomSorter {
+    CustomSorter::new(move |a, b| {
+        with_profiles(a, b, |pa, pb| {
+            key(pa).to_lowercase().cmp(&key(pb).to_lowercase())
+        })
+    })
+}
+
+/// Numeric sorter on an integer key (year, timestamp).
+fn num_sorter(key: impl Fn(&Profile) -> u64 + 'static) -> CustomSorter {
+    CustomSorter::new(move |a, b| with_profiles(a, b, |pa, pb| key(pa).cmp(&key(pb))))
+}
+
+/// Run `cmp` on the two boxed profiles, yielding a GTK ordering (Equal on a
+/// downcast miss — never happens, the store only holds boxed entries).
+fn with_profiles(
+    a: &glib::Object,
+    b: &glib::Object,
+    cmp: impl Fn(&Profile, &Profile) -> std::cmp::Ordering,
+) -> gtk::Ordering {
+    let (Some(oa), Some(ob)) = (
+        a.downcast_ref::<BoxedAnyObject>(),
+        b.downcast_ref::<BoxedAnyObject>(),
+    ) else {
+        return gtk::Ordering::Equal;
+    };
+    cmp(&oa.borrow::<Entry>().1, &ob.borrow::<Entry>().1).into()
 }
