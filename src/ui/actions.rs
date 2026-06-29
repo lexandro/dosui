@@ -8,6 +8,7 @@
 use std::path::Path;
 use std::rc::Rc;
 
+use gtk::glib::BoxedAnyObject;
 use gtk::prelude::*;
 use gtk::{
     gio, AlertDialog, Application, ApplicationWindow, Box as GtkBox, DropTarget, FileDialog,
@@ -16,9 +17,9 @@ use gtk::{
 
 use crate::app::APP_NAME;
 use crate::config::profile::{self, Profile};
-use crate::config::{archive, conf_import};
+use crate::config::{archive, conf_import, console};
 use crate::launcher;
-use crate::ui::library::{selected_entry, Profiles};
+use crate::ui::library::{selected_entry, Entry, Profiles};
 
 /// Register every `app.*` action plus accelerators.
 pub(crate) fn install_actions(
@@ -68,19 +69,27 @@ pub(crate) fn install_actions(
     }
     app.add_action(&new);
 
-    let console = gio::SimpleAction::new("console", None);
+    // Recreate the built-in DOS console profile (if a user deleted it) and
+    // select it. Idempotent: an existing console is simply re-selected.
+    let add_console = gio::SimpleAction::new("add-console", None);
     {
+        let selection = selection.clone();
         let window = window.downgrade();
-        console.connect_activate(move |_, _| {
-            if let Err(e) = launcher::launch_console() {
-                log::error!("opening DOS console failed: {e:#}");
+        let reload = reload.clone();
+        add_console.connect_activate(move |_, _| match console::ensure() {
+            Ok(_) => {
+                reload();
+                select_by_id(&selection, console::CONSOLE_ID);
+            }
+            Err(e) => {
+                log::error!("adding DOS console failed: {e:#}");
                 if let Some(window) = window.upgrade() {
-                    report(&window, "Could not open DOS console", &e);
+                    report(&window, "Could not add DOS console", &e);
                 }
             }
         });
     }
-    app.add_action(&console);
+    app.add_action(&add_console);
 
     install_import_actions(app, window, reload);
 
@@ -222,6 +231,23 @@ pub(crate) fn install_actions(
     set_accels(app);
 }
 
+/// Select the entry whose profile id matches `id`, if it is present (and not
+/// filtered out). Used after adding the console so the new tile is highlighted.
+fn select_by_id(selection: &SingleSelection, id: &str) {
+    let Some(model) = selection.model() else {
+        return;
+    };
+    for i in 0..model.n_items() {
+        let Some(obj) = model.item(i).and_downcast::<BoxedAnyObject>() else {
+            continue;
+        };
+        if obj.borrow::<Entry>().1.id == id {
+            selection.set_selected(i);
+            return;
+        }
+    }
+}
+
 /// Disable selection-dependent commands when nothing is selected.
 fn enable_with_selection(selection: &SingleSelection, actions: &[gio::SimpleAction]) {
     let actions: Vec<gio::SimpleAction> = actions.to_vec();
@@ -242,7 +268,7 @@ fn set_accels(app: &Application) {
     app.set_accels_for_action("app.play", &["<Ctrl>p"]);
     app.set_accels_for_action("app.edit", &["<Ctrl>e"]);
     app.set_accels_for_action("app.new", &["<Ctrl>n"]);
-    app.set_accels_for_action("app.console", &["<Ctrl>t"]);
+    app.set_accels_for_action("app.add-console", &["<Ctrl>t"]);
     app.set_accels_for_action("app.import", &["<Ctrl>i"]);
     app.set_accels_for_action("app.duplicate", &["<Ctrl>d"]);
     app.set_accels_for_action("app.delete", &["Delete"]);

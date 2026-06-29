@@ -2,7 +2,6 @@
 //!
 //! - config  (`~/.config/dosui`)      : user preferences + global defaults
 //! - data    (`~/.local/share/dosui`) : the profile library (the valuable content)
-//! - cache   (`~/.cache/dosui`)       : thumbnails, transient logs
 
 use std::path::PathBuf;
 
@@ -25,11 +24,6 @@ pub fn config_dir() -> Result<PathBuf> {
 /// `~/.local/share/dosui` — the data root.
 pub fn data_dir() -> Result<PathBuf> {
     Ok(project_dirs()?.data_dir().to_path_buf())
-}
-
-/// `~/.cache/dosui`.
-pub fn cache_dir() -> Result<PathBuf> {
-    Ok(project_dirs()?.cache_dir().to_path_buf())
 }
 
 /// `~/.local/share/dosui/profiles` — one subdirectory per game profile.

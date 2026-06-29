@@ -5,6 +5,7 @@
 
 pub mod archive;
 pub mod conf_import;
+pub mod console;
 pub mod defaults;
 pub mod dosbox_conf;
 pub mod paths;

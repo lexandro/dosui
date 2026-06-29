@@ -4,8 +4,9 @@
 use std::path::{Path, PathBuf};
 
 use gtk::prelude::*;
-use gtk::{Box as GtkBox, Button, ContentFit, Label, Orientation, Picture};
+use gtk::{Box as GtkBox, Button, ContentFit, IconPaintable, Label, Orientation, Picture};
 
+use crate::config::console;
 use crate::config::profile::{self, Profile};
 
 /// Widgets in the detail pane whose contents change with the selection.
@@ -99,7 +100,9 @@ pub(crate) fn show_profile(detail: &Detail, dir: &Path, profile: &Profile) {
         .notes
         .set_text(profile.notes.as_deref().unwrap_or(""));
     detail.last_played.set_text(&last_played_line(profile));
-    set_cover(detail, cover_path(dir, profile).as_deref());
+    detail
+        .cover
+        .set_visible(apply_cover(&detail.cover, dir, profile));
     detail.play.set_sensitive(true);
     detail.edit.set_sensitive(true);
 }
@@ -110,7 +113,8 @@ pub(crate) fn clear_detail(detail: &Detail) {
     detail.meta.set_text("");
     detail.notes.set_text("");
     detail.last_played.set_text("");
-    set_cover(detail, None);
+    detail.cover.set_filename(None::<&str>);
+    detail.cover.set_visible(false);
     detail.play.set_sensitive(false);
     detail.edit.set_sensitive(false);
 }
@@ -135,18 +139,37 @@ pub(crate) fn display_title(profile: &Profile) -> String {
     }
 }
 
-/// Show the cover image (hidden when absent or missing on disk).
-fn set_cover(detail: &Detail, path: Option<&Path>) {
-    match path {
+/// Fill a `Picture` with the profile's cover image, falling back to a terminal
+/// icon for console profiles. Returns whether anything was shown — the detail
+/// pane collapses its cover slot when empty; the grid keeps its fixed slot.
+/// Shared with the grid so both panes render covers identically.
+pub(crate) fn apply_cover(cover: &Picture, dir: &Path, profile: &Profile) -> bool {
+    match cover_path(dir, profile) {
         Some(p) if p.exists() => {
-            detail.cover.set_filename(p.to_str());
-            detail.cover.set_visible(true);
+            cover.set_filename(p.to_str());
+            true
+        }
+        _ if console::is_console(profile) => {
+            cover.set_paintable(Some(&console_paintable(cover)));
+            true
         }
         _ => {
-            detail.cover.set_filename(None::<&str>);
-            detail.cover.set_visible(false);
+            cover.set_filename(None::<&str>);
+            false
         }
     }
+}
+
+/// A themed terminal icon to stand in as the DOS console's cover.
+fn console_paintable(widget: &impl IsA<gtk::Widget>) -> IconPaintable {
+    gtk::IconTheme::for_display(&widget.display()).lookup_icon(
+        "utilities-terminal",
+        &[],
+        96,
+        1,
+        gtk::TextDirection::None,
+        gtk::IconLookupFlags::empty(),
+    )
 }
 
 /// "Last played: …" line, or "Never played".

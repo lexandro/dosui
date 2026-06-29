@@ -8,7 +8,7 @@ use gtk::{
     SignalListItemFactory, SingleSelection,
 };
 
-use crate::ui::detail::{cover_path, display_title};
+use crate::ui::detail::{apply_cover, display_title};
 use crate::ui::library::Entry;
 
 /// Build the factory for the grid, given the selection (for click-to-select),
@@ -65,10 +65,7 @@ pub(crate) fn build_factory(
         let entry = obj.borrow::<Entry>();
         let (dir, profile) = &*entry;
         title.set_text(&display_title(profile));
-        match cover_path(dir, profile) {
-            Some(p) if p.exists() => cover.set_filename(p.to_str()),
-            _ => cover.set_filename(None::<&str>),
-        }
+        apply_cover(&cover, dir, profile);
     });
 
     factory
