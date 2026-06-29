@@ -12,7 +12,7 @@
 set -euo pipefail
 
 # Pinned dosbox-staging version, downloaded only when no local build is found.
-DOSBOX_STAGING_VERSION="${DOSBOX_STAGING_VERSION:-0.82.0}"
+DOSBOX_STAGING_VERSION="${DOSBOX_STAGING_VERSION:-0.82.2}"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DIST="$ROOT/dist"

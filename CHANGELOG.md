@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Bundle dosbox-staging 0.82.2 (was 0.82.0) in the AppImage.
+- Update Rust dependencies (toml 1, thiserror 2, zip 8, which 8, directories 6)
+  and GitHub Actions to their latest major versions.
+
 ## [0.2.0] - 2026-06-29
 
 ### Added

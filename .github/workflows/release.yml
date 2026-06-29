@@ -13,7 +13,7 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   # dosbox-staging build bundled into the AppImage (downloaded by the script).
-  DOSBOX_STAGING_VERSION: "0.82.0"
+  DOSBOX_STAGING_VERSION: "0.82.2"
 
 jobs:
   appimage:
