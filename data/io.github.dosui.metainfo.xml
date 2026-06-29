@@ -28,18 +28,18 @@
 
   <launchable type="desktop-id">io.github.dosui.desktop</launchable>
 
-  <url type="homepage">https://github.com/lexandro2000/dosui</url>
-  <url type="bugtracker">https://github.com/lexandro2000/dosui/issues</url>
-  <url type="vcs-browser">https://github.com/lexandro2000/dosui</url>
+  <url type="homepage">https://github.com/lexandro/dosui</url>
+  <url type="bugtracker">https://github.com/lexandro/dosui/issues</url>
+  <url type="vcs-browser">https://github.com/lexandro/dosui</url>
 
-  <developer id="io.github.lexandro2000">
+  <developer id="io.github.lexandro">
     <name>lexandro2000</name>
   </developer>
 
   <screenshots>
     <screenshot type="default">
       <caption>The dosui main window</caption>
-      <image>https://raw.githubusercontent.com/lexandro2000/dosui/main/docs/screenshot.png</image>
+      <image>https://raw.githubusercontent.com/lexandro/dosui/main/docs/screenshot.png</image>
     </screenshot>
   </screenshots>
 
@@ -59,6 +59,16 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="0.2.0" date="2026-06-29">
+      <description>
+        <p>First public release.</p>
+        <ul>
+          <li>D-Fend-style layout: category tree, sortable details list, icon view, and a tabbed preview pane.</li>
+          <li>Built-in "DOS Console" profile with a ready C: drive.</li>
+          <li>AppImage release pipeline and multi-distro build instructions.</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-06-28">
       <description>
         <p>Initial working frontend.</p>

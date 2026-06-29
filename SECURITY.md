@@ -15,7 +15,7 @@ and the `main` branch only.
 Please **do not** open a public issue for security vulnerabilities.
 
 Instead, report them privately via GitHub's
-[private vulnerability reporting](https://github.com/lexandro2000/dosui/security/advisories/new)
+[private vulnerability reporting](https://github.com/lexandro/dosui/security/advisories/new)
 or by email to **lexandro2000@gmail.com**.
 
 Include as much detail as you can: affected version, reproduction steps, and the

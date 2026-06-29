@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-29
+
 ### Added
 - D-Fend-style main window: category tree, a sortable details list with
   click-to-sort columns, a switchable icon view, and a tabbed preview pane
@@ -44,5 +46,6 @@ Initial working frontend.
 - Import from `dosbox.conf` (D-Fend / DBGL) and zipped games (drag & drop).
 - Single AppImage bundling dosbox-staging while following the host GTK theme.
 
-[Unreleased]: https://github.com/lexandro2000/dosui/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/lexandro2000/dosui/releases/tag/v0.1.0
+[Unreleased]: https://github.com/lexandro/dosui/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/lexandro/dosui/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/lexandro/dosui/releases/tag/v0.1.0

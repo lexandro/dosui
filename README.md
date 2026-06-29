@@ -5,7 +5,7 @@ a game/profile launcher and configuration manager in the spirit of
 [D-Fend Reloaded](https://dfendreloaded.sourceforge.io/), but without the Java
 runtime and without the Windows baggage.
 
-[![CI](https://github.com/lexandro2000/dosui/actions/workflows/ci.yml/badge.svg)](https://github.com/lexandro2000/dosui/actions/workflows/ci.yml)
+[![CI](https://github.com/lexandro/dosui/actions/workflows/ci.yml/badge.svg)](https://github.com/lexandro/dosui/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Built with Rust](https://img.shields.io/badge/built%20with-Rust-orange.svg?logo=rust)](https://www.rust-lang.org/)
 [![GTK4](https://img.shields.io/badge/GTK-4-729fcf.svg?logo=gnome)](https://www.gtk.org/)
@@ -45,7 +45,7 @@ GUI, and launch — no hand-editing INI files.
 ### AppImage (recommended)
 
 Grab the latest `dosui-x86_64.AppImage` from the
-[Releases](https://github.com/lexandro2000/dosui/releases) page, then:
+[Releases](https://github.com/lexandro/dosui/releases) page, then:
 
 ```sh
 chmod +x dosui-x86_64.AppImage

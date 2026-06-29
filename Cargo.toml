@@ -1,14 +1,14 @@
 [package]
 name = "dosui"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.80"
 description = "Lightweight native Linux frontend for DOSBox, D-Fend Reloaded style"
 authors = ["lexandro2000 <lexandro2000@gmail.com>"]
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/lexandro2000/dosui"
-homepage = "https://github.com/lexandro2000/dosui"
+repository = "https://github.com/lexandro/dosui"
+homepage = "https://github.com/lexandro/dosui"
 keywords = ["dosbox", "frontend", "launcher", "gtk4", "retro"]
 categories = ["games", "gui"]
 exclude = ["/docs", "/packaging", "/.github", "/data/*.png"]
