@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- First-run desktop integration: when launched as an AppImage with no menu
+  entry yet, dosui installs a `.desktop` launcher and icon into the user's XDG
+  data dirs so it shows up in the application menu. Idempotent, and skipped for
+  installed or dev runs.
+
 ### Changed
 - Bundle dosbox-staging 0.82.2 (was 0.82.0) in the AppImage.
 - Update Rust dependencies (toml 1, thiserror 2, zip 8, which 8, directories 6)

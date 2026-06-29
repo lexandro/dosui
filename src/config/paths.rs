@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use directories::ProjectDirs;
+use directories::{BaseDirs, ProjectDirs};
 
 use crate::app::APP_NAME;
 
@@ -29,4 +29,13 @@ pub fn data_dir() -> Result<PathBuf> {
 /// `~/.local/share/dosui/profiles` — one subdirectory per game profile.
 pub fn profiles_dir() -> Result<PathBuf> {
     Ok(data_dir()?.join("profiles"))
+}
+
+/// `~/.local/share` — the XDG data *base* dir (parent of `applications/` and
+/// `icons/`). Used for first-run desktop integration, not for dosui's own files.
+pub fn data_home() -> Result<PathBuf> {
+    Ok(BaseDirs::new()
+        .context("could not determine the home directory")?
+        .data_dir()
+        .to_path_buf())
 }
