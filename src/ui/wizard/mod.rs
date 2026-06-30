@@ -1,6 +1,9 @@
 //! New-profile wizard: a 3-step guided alternative to the full editor (choose
 //! folder → pick program → name it). This module is the flow/navigation; the
-//! pages and the profile they build live in [`crate::ui::wizard_pages`].
+//! pages and the profile they build live in [`crate::ui::wizard_pages`], and the
+//! scriptable test hooks in [`scripting`].
+
+mod scripting;
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -103,9 +106,9 @@ pub fn open(parent: &ApplicationWindow, on_created: Rc<dyn Fn()>) {
         });
     }
 
-    // Expose folder/navigation as app actions while open (see actions in tests).
+    // Expose folder/navigation as app actions while open (driveable in tests).
     if let Some(app) = parent.application() {
-        register_wizard_actions(&app, &window, &wiz.folder, &back, &next, &cancel);
+        scripting::register(&app, &window, &wiz.folder, &back, &next, &cancel);
     }
 
     window.present();
@@ -163,51 +166,4 @@ fn pick_folder(window: &WeakRef<Window>, entry: &Entry) {
             }
         },
     );
-}
-
-/// Temporary app actions mirroring the controls (`wizard-set-folder` with a
-/// string path, `wizard-next` / `wizard-back` / `wizard-cancel`), removed on close.
-/// Lets the flow be scripted without on-screen input.
-fn register_wizard_actions(
-    app: &gtk::Application,
-    window: &Window,
-    folder: &Entry,
-    back: &Button,
-    next: &Button,
-    cancel: &Button,
-) {
-    let set = gio::SimpleAction::new("wizard-set-folder", Some(gtk::glib::VariantTy::STRING));
-    {
-        let folder = folder.clone();
-        set.connect_activate(move |_, param| {
-            if let Some(path) = param.and_then(|v| v.str()) {
-                folder.set_text(path);
-            }
-        });
-    }
-    app.add_action(&set);
-
-    for (name, button) in [
-        ("wizard-next", next),
-        ("wizard-back", back),
-        ("wizard-cancel", cancel),
-    ] {
-        let action = gio::SimpleAction::new(name, None);
-        let button = button.clone();
-        action.connect_activate(move |_, _| button.emit_clicked());
-        app.add_action(&action);
-    }
-
-    let app = app.clone();
-    window.connect_close_request(move |_| {
-        for name in [
-            "wizard-set-folder",
-            "wizard-next",
-            "wizard-back",
-            "wizard-cancel",
-        ] {
-            app.remove_action(name);
-        }
-        gtk::glib::Propagation::Proceed
-    });
 }
