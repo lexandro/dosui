@@ -6,6 +6,7 @@
 //! needs no GTK widgets or running main loop, just GIO (part of GLib).
 
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result};
 use gtk::gio;
@@ -39,6 +40,7 @@ pub fn install() -> Result<()> {
         let launcher = desktop::install_desktop_launcher(&dir, &exec)?;
         mark_trusted(&launcher);
     }
+    refresh_caches(&data_home);
     Ok(())
 }
 
@@ -50,7 +52,25 @@ pub fn uninstall() -> Result<bool> {
     if let Some(dir) = desktop_dir() {
         removed |= desktop::remove_desktop_launcher(&dir)?;
     }
+    refresh_caches(&data_home);
     Ok(removed)
+}
+
+/// Rebuild the desktop-entry and icon-theme caches so the change shows up
+/// immediately instead of after a re-login. Without this, a stale
+/// `icon-theme.cache` hides a freshly written icon. Best-effort — the tools may
+/// be absent, and missing `index.theme` is handled by `-t`.
+fn refresh_caches(data_home: &Path) {
+    run_quiet(Command::new("update-desktop-database").arg(data_home.join("applications")));
+    run_quiet(
+        Command::new("gtk-update-icon-cache")
+            .args(["-f", "-t"])
+            .arg(data_home.join("icons/hicolor")),
+    );
+}
+
+fn run_quiet(cmd: &mut Command) {
+    let _ = cmd.stdout(Stdio::null()).stderr(Stdio::null()).status();
 }
 
 /// The user's desktop directory (`$XDG_DESKTOP_DIR` or `~/Desktop`), if any.

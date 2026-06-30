@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sizes (16–512) for the menu, desktop, and window/taskbar — replaces the
   placeholder. Regenerate from `assets/app_icon.png` via `packaging/gen-icons.sh`.
 
+### Fixed
+- Desktop integration now refreshes the desktop-entry and icon-theme caches
+  after adding/removing shortcuts, so the icon shows in the menu and on the
+  desktop right away instead of after a re-login (a stale `icon-theme.cache`
+  was hiding the freshly written icon).
+
 ## [0.3.0] - 2026-06-30
 
 ### Added
