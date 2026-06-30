@@ -51,9 +51,33 @@ pub struct DosboxConfig {
     /// `[sblaster] sbtype` — sb16 / sbpro2 / none / …
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sbtype: Option<String>,
+    /// `[sblaster] sbbase` — IO port (220, 240, …)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sbbase: Option<String>,
+    /// `[sblaster] irq`
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sbirq: Option<String>,
+    /// `[sblaster] dma`
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sbdma: Option<String>,
+    /// `[sblaster] hdma` — high DMA (SB16)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sbhdma: Option<String>,
     /// `[mixer] rate` (Hz)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rate: Option<u32>,
+    /// `[gus] gus` — enable Gravis UltraSound
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gus: Option<bool>,
+    /// `[gus] gusbase` — IO port
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gusbase: Option<String>,
+    /// `[gus] gusirq`
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gusirq: Option<String>,
+    /// `[gus] gusdma`
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gusdma: Option<String>,
     /// `[midi] mididevice` — auto / mt32 / fluidsynth / none
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mididevice: Option<String>,
@@ -90,7 +114,15 @@ impl DosboxConfig {
             aspect: overrides.aspect.or(self.aspect),
             scaler: pick(&overrides.scaler, &self.scaler),
             sbtype: pick(&overrides.sbtype, &self.sbtype),
+            sbbase: pick(&overrides.sbbase, &self.sbbase),
+            sbirq: pick(&overrides.sbirq, &self.sbirq),
+            sbdma: pick(&overrides.sbdma, &self.sbdma),
+            sbhdma: pick(&overrides.sbhdma, &self.sbhdma),
             rate: overrides.rate.or(self.rate),
+            gus: overrides.gus.or(self.gus),
+            gusbase: pick(&overrides.gusbase, &self.gusbase),
+            gusirq: pick(&overrides.gusirq, &self.gusirq),
+            gusdma: pick(&overrides.gusdma, &self.gusdma),
             mididevice: pick(&overrides.mididevice, &self.mididevice),
             passthrough,
         }
@@ -131,6 +163,30 @@ impl DosboxConfig {
         }
         if let Some(v) = &self.sbtype {
             put(&mut sections, "sblaster", "sbtype", v.clone());
+        }
+        if let Some(v) = &self.sbbase {
+            put(&mut sections, "sblaster", "sbbase", v.clone());
+        }
+        if let Some(v) = &self.sbirq {
+            put(&mut sections, "sblaster", "irq", v.clone());
+        }
+        if let Some(v) = &self.sbdma {
+            put(&mut sections, "sblaster", "dma", v.clone());
+        }
+        if let Some(v) = &self.sbhdma {
+            put(&mut sections, "sblaster", "hdma", v.clone());
+        }
+        if let Some(v) = self.gus {
+            put(&mut sections, "gus", "gus", bool_str(v));
+        }
+        if let Some(v) = &self.gusbase {
+            put(&mut sections, "gus", "gusbase", v.clone());
+        }
+        if let Some(v) = &self.gusirq {
+            put(&mut sections, "gus", "gusirq", v.clone());
+        }
+        if let Some(v) = &self.gusdma {
+            put(&mut sections, "gus", "gusdma", v.clone());
         }
         if let Some(v) = &self.mididevice {
             put(&mut sections, "midi", "mididevice", v.clone());
@@ -298,6 +354,33 @@ mod tests {
         assert!(conf.contains("[render]\naspect = true\n"));
         // exit_after=false -> no trailing exit
         assert!(!conf.contains("\nexit\n"));
+    }
+
+    #[test]
+    fn sound_card_io_renders_into_sblaster_and_gus() {
+        let conf = DosboxConfig {
+            sbtype: Some("sb16".into()),
+            sbbase: Some("240".into()),
+            sbirq: Some("5".into()),
+            sbdma: Some("1".into()),
+            sbhdma: Some("5".into()),
+            gus: Some(true),
+            gusbase: Some("240".into()),
+            gusirq: Some("5".into()),
+            gusdma: Some("3".into()),
+            ..Default::default()
+        }
+        .render(&run(false));
+        assert!(conf.contains("[sblaster]\n"));
+        assert!(conf.contains("sbbase = 240\n"));
+        assert!(conf.contains("irq = 5\n"));
+        assert!(conf.contains("dma = 1\n"));
+        assert!(conf.contains("hdma = 5\n"));
+        assert!(conf.contains("[gus]\n"));
+        assert!(conf.contains("gus = true\n"));
+        assert!(conf.contains("gusbase = 240\n"));
+        assert!(conf.contains("gusirq = 5\n"));
+        assert!(conf.contains("gusdma = 3\n"));
     }
 
     #[test]

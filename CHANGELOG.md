@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Sound tab: dedicated **Sound Blaster** (type, port, IRQ, DMA, high DMA) and
+  **Gravis UltraSound** (enable, port, IRQ, DMA) settings, grouped into sections
+  with the real default values — no more hand-editing the Advanced passthrough
+  for these. The Sound Blaster model list is also complete (gb/sb1/sb2/sbpro1/
+  sbpro2/sb16/ess/none).
+
 ### Changed
 - Tidier Settings ▸ Application: grouped sections (DOSBox, Desktop shortcuts)
   each with a heading, description, and framed content; the Add/Remove shortcut

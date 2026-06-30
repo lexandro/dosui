@@ -42,7 +42,18 @@ const CPUTYPE_OPTS: [&str; 6] = [
 ];
 const SCALER_OPTS: [&str; 4] = [DEFAULT, "none", "normal2x", "normal3x"];
 const ASPECT_OPTS: [&str; 3] = [DEFAULT, "on", "off"];
-const SBTYPE_OPTS: [&str; 6] = [DEFAULT, "sb16", "sbpro2", "sb2", "gb", "none"];
+const SBTYPE_OPTS: [&str; 9] = [
+    DEFAULT, "gb", "sb1", "sb2", "sbpro1", "sbpro2", "sb16", "ess", "none",
+];
+const SBBASE_OPTS: [&str; 9] = [
+    DEFAULT, "220", "240", "260", "280", "2a0", "2c0", "2e0", "300",
+];
+const SBIRQ_OPTS: [&str; 8] = [DEFAULT, "3", "5", "7", "9", "10", "11", "12"];
+const SBDMA_OPTS: [&str; 7] = [DEFAULT, "0", "1", "3", "5", "6", "7"];
+const GUS_OPTS: [&str; 3] = [DEFAULT, "on", "off"];
+const GUSBASE_OPTS: [&str; 7] = [DEFAULT, "210", "220", "230", "240", "250", "260"];
+const GUSIRQ_OPTS: [&str; 8] = [DEFAULT, "2", "3", "5", "7", "11", "12", "15"];
+const GUSDMA_OPTS: [&str; 6] = [DEFAULT, "1", "3", "5", "6", "7"];
 const MIDI_OPTS: [&str; 5] = [DEFAULT, "auto", "mt32", "fluidsynth", "none"];
 
 // Presets for the editable (free-text) value fields — the user can also type
@@ -69,7 +80,15 @@ const DEF_MEMSIZE: &str = "16";
 const DEF_ASPECT: &str = "auto";
 const DEF_SCALER: &str = "none";
 const DEF_SBTYPE: &str = "sb16";
+const DEF_SBBASE: &str = "220";
+const DEF_SBIRQ: &str = "7";
+const DEF_SBDMA: &str = "1";
+const DEF_SBHDMA: &str = "5";
 const DEF_RATE: &str = "48000";
+const DEF_GUS: &str = "off";
+const DEF_GUSBASE: &str = "240";
+const DEF_GUSIRQ: &str = "5";
+const DEF_GUSDMA: &str = "3";
 const DEF_MIDI: &str = "auto";
 
 /// The DOSBox tab pages plus the widgets read on save.
@@ -88,7 +107,15 @@ pub struct DosboxForm {
     cputype: DropDown,
     cycles: Entry,
     sbtype: DropDown,
+    sbbase: DropDown,
+    sbirq: DropDown,
+    sbdma: DropDown,
+    sbhdma: DropDown,
     rate: Entry,
+    gus: DropDown,
+    gusbase: DropDown,
+    gusirq: DropDown,
+    gusdma: DropDown,
     mididevice: DropDown,
     passthrough: TextView,
     preview: TextView,
@@ -179,23 +206,83 @@ impl DosboxForm {
         graphics_page.append(&row);
 
         let sound_page = widgets::page();
+
+        sound_page.append(&heading("Sound Blaster"));
         let (row, sbtype) = config_row(
-            "Sound Blaster",
+            "Type",
             &SBTYPE_OPTS,
             config.sbtype.as_deref(),
             &sentinel(DEF_SBTYPE),
         );
         sound_page.append(&row);
+        let (row, sbbase) = config_row(
+            "Port",
+            &SBBASE_OPTS,
+            config.sbbase.as_deref(),
+            &sentinel(DEF_SBBASE),
+        );
+        sound_page.append(&row);
+        let (row, sbirq) = config_row(
+            "IRQ",
+            &SBIRQ_OPTS,
+            config.sbirq.as_deref(),
+            &sentinel(DEF_SBIRQ),
+        );
+        sound_page.append(&row);
+        let (row, sbdma) = config_row(
+            "DMA",
+            &SBDMA_OPTS,
+            config.sbdma.as_deref(),
+            &sentinel(DEF_SBDMA),
+        );
+        sound_page.append(&row);
+        let (row, sbhdma) = config_row(
+            "High DMA",
+            &SBDMA_OPTS,
+            config.sbhdma.as_deref(),
+            &sentinel(DEF_SBHDMA),
+        );
+        sound_page.append(&row);
+
+        sound_page.append(&heading("Gravis UltraSound"));
+        let gus_cur = config.gus.map(|b| if b { "on" } else { "off" });
+        let (row, gus) = config_row("Enable", &GUS_OPTS, gus_cur, &sentinel(DEF_GUS));
+        sound_page.append(&row);
+        let (row, gusbase) = config_row(
+            "Port",
+            &GUSBASE_OPTS,
+            config.gusbase.as_deref(),
+            &sentinel(DEF_GUSBASE),
+        );
+        sound_page.append(&row);
+        let (row, gusirq) = config_row(
+            "IRQ",
+            &GUSIRQ_OPTS,
+            config.gusirq.as_deref(),
+            &sentinel(DEF_GUSIRQ),
+        );
+        sound_page.append(&row);
+        let (row, gusdma) = config_row(
+            "DMA",
+            &GUSDMA_OPTS,
+            config.gusdma.as_deref(),
+            &sentinel(DEF_GUSDMA),
+        );
+        sound_page.append(&row);
+
+        sound_page.append(&heading("Mixer"));
         let rate_cur = config.rate.map(|v| v.to_string()).unwrap_or_default();
         let (row, rate) = widgets::combo_row(
-            "Mixer rate (Hz)",
+            "Rate (Hz)",
             &RATE_PRESETS,
             &rate_cur,
             &placeholder(DEF_RATE),
         );
         sound_page.append(&row);
+
+        sound_page.append(&heading("MIDI"));
         let (row, mididevice) = config_row(
-            "MIDI device",
+            "Device",
             &MIDI_OPTS,
             config.mididevice.as_deref(),
             &sentinel(DEF_MIDI),
@@ -230,7 +317,15 @@ impl DosboxForm {
             cputype,
             cycles,
             sbtype,
+            sbbase,
+            sbirq,
+            sbdma,
+            sbhdma,
             rate,
+            gus,
+            gusbase,
+            gusirq,
+            gusdma,
             mididevice,
             passthrough,
             preview,
@@ -249,7 +344,15 @@ impl DosboxForm {
             aspect: cfg_bool(&self.aspect),
             scaler: cfg_opt(&self.scaler),
             sbtype: cfg_opt(&self.sbtype),
+            sbbase: cfg_opt(&self.sbbase),
+            sbirq: cfg_opt(&self.sbirq),
+            sbdma: cfg_opt(&self.sbdma),
+            sbhdma: cfg_opt(&self.sbhdma),
             rate: widgets::none_if_empty(&self.rate.text()).and_then(|s| s.parse().ok()),
+            gus: cfg_bool(&self.gus),
+            gusbase: cfg_opt(&self.gusbase),
+            gusirq: cfg_opt(&self.gusirq),
+            gusdma: cfg_opt(&self.gusdma),
             mididevice: cfg_opt(&self.mididevice),
             passthrough: parse_passthrough(&widgets::textview_text(&self.passthrough)),
         }
@@ -334,6 +437,16 @@ fn hint(text: &str) -> Label {
     Label::builder()
         .label(text)
         .halign(gtk::Align::Start)
+        .build()
+}
+
+/// A bold section heading inside a tab (e.g. "Sound Blaster").
+fn heading(text: &str) -> Label {
+    Label::builder()
+        .label(text)
+        .halign(gtk::Align::Start)
+        .margin_top(6)
+        .css_classes(["heading"])
         .build()
 }
 
