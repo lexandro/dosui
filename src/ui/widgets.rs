@@ -106,6 +106,24 @@ pub fn combo_row(label: &str, presets: &[&str], value: &str, placeholder: &str) 
     (labeled(label, &inner), entry)
 }
 
+/// Wire a "Browse…" button to a file picker that fills `entry`, using the
+/// button's own toplevel window as the dialog parent (resolved at click time).
+/// Lets file rows live in window-less forms like the DOSBox tabs.
+pub fn wire_browse_root(entry: &Entry, browse: &Button, title: &str) {
+    let entry = entry.clone();
+    let title = title.to_string();
+    browse.connect_clicked(move |btn| {
+        let parent = btn.root().and_downcast::<gtk::Window>();
+        let dialog = gtk::FileDialog::builder().title(title.clone()).build();
+        let entry = entry.clone();
+        dialog.open(parent.as_ref(), gtk::gio::Cancellable::NONE, move |res| {
+            if let Ok(Some(path)) = res.map(|f| f.path()) {
+                entry.set_text(&path.display().to_string());
+            }
+        });
+    });
+}
+
 /// A dropdown pre-selected to `selected` (by matching text), if present.
 pub fn dropdown(options: &[&str], selected: Option<&str>) -> DropDown {
     let dd = DropDown::from_strings(options);

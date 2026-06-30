@@ -70,6 +70,9 @@ pub struct DosboxConfig {
     /// `[sblaster] sbtype` — sb16 / sbpro2 / none / …
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sbtype: Option<String>,
+    /// `[sblaster] oplmode` — OPL FM model (auto / opl2 / opl3 / esfm / none)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oplmode: Option<String>,
     /// `[sblaster] sbbase` — IO port (220, 240, …)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sbbase: Option<String>,
@@ -100,6 +103,18 @@ pub struct DosboxConfig {
     /// `[midi] mididevice` — auto / mt32 / fluidsynth / none
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mididevice: Option<String>,
+    /// `[midi] mpu401` — intelligent / uart / none
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mpu401: Option<String>,
+    /// `[fluidsynth] soundfont` — path to a `.sf2` for General MIDI
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub soundfont: Option<String>,
+    /// `[speaker] pcspeaker` — PC speaker model (impulse / discrete / none)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pcspeaker: Option<String>,
+    /// `[speaker] tandy` — Tandy/PCjr 3-voice sound (auto / on / off)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tandy: Option<String>,
 
     /// Advanced / unmodeled keys: section -> (key -> value), order preserved.
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
@@ -139,6 +154,7 @@ impl DosboxConfig {
             aspect: overrides.aspect.or(self.aspect),
             glshader: pick(&overrides.glshader, &self.glshader),
             sbtype: pick(&overrides.sbtype, &self.sbtype),
+            oplmode: pick(&overrides.oplmode, &self.oplmode),
             sbbase: pick(&overrides.sbbase, &self.sbbase),
             sbirq: pick(&overrides.sbirq, &self.sbirq),
             sbdma: pick(&overrides.sbdma, &self.sbdma),
@@ -149,6 +165,10 @@ impl DosboxConfig {
             gusirq: pick(&overrides.gusirq, &self.gusirq),
             gusdma: pick(&overrides.gusdma, &self.gusdma),
             mididevice: pick(&overrides.mididevice, &self.mididevice),
+            mpu401: pick(&overrides.mpu401, &self.mpu401),
+            soundfont: pick(&overrides.soundfont, &self.soundfont),
+            pcspeaker: pick(&overrides.pcspeaker, &self.pcspeaker),
+            tandy: pick(&overrides.tandy, &self.tandy),
             passthrough,
         }
     }
@@ -207,6 +227,9 @@ impl DosboxConfig {
         if let Some(v) = &self.sbtype {
             put(&mut sections, "sblaster", "sbtype", v.clone());
         }
+        if let Some(v) = &self.oplmode {
+            put(&mut sections, "sblaster", "oplmode", v.clone());
+        }
         if let Some(v) = &self.sbbase {
             put(&mut sections, "sblaster", "sbbase", v.clone());
         }
@@ -233,6 +256,18 @@ impl DosboxConfig {
         }
         if let Some(v) = &self.mididevice {
             put(&mut sections, "midi", "mididevice", v.clone());
+        }
+        if let Some(v) = &self.mpu401 {
+            put(&mut sections, "midi", "mpu401", v.clone());
+        }
+        if let Some(v) = &self.soundfont {
+            put(&mut sections, "fluidsynth", "soundfont", v.clone());
+        }
+        if let Some(v) = &self.pcspeaker {
+            put(&mut sections, "speaker", "pcspeaker", v.clone());
+        }
+        if let Some(v) = &self.tandy {
+            put(&mut sections, "speaker", "tandy", v.clone());
         }
 
         // Passthrough merges underneath; typed keys already set above win.
@@ -428,6 +463,25 @@ mod tests {
         assert!(conf.contains("xms = true\n"));
         assert!(conf.contains("ems = emm386\n"));
         assert!(conf.contains("umb = false\n"));
+    }
+
+    #[test]
+    fn extra_sound_keys_render_into_their_sections() {
+        let conf = DosboxConfig {
+            oplmode: Some("opl3".into()),
+            mpu401: Some("uart".into()),
+            soundfont: Some("/sf/gm.sf2".into()),
+            pcspeaker: Some("discrete".into()),
+            tandy: Some("on".into()),
+            ..Default::default()
+        }
+        .render(&run(false));
+        assert!(conf.contains("oplmode = opl3\n"));
+        assert!(conf.contains("mpu401 = uart\n"));
+        assert!(conf.contains("[fluidsynth]\nsoundfont = /sf/gm.sf2\n"));
+        assert!(conf.contains("[speaker]\n"));
+        assert!(conf.contains("pcspeaker = discrete\n"));
+        assert!(conf.contains("tandy = on\n"));
     }
 
     #[test]

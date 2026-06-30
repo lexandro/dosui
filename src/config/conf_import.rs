@@ -174,8 +174,13 @@ fn parse_dosbox(mut sections: IndexMap<String, IndexMap<String, String>>) -> Dos
     cfg.glshader = take("render", "glshader");
     take("render", "scaler"); // obsolete in dosbox-staging — drop, don't preserve
     cfg.sbtype = take("sblaster", "sbtype");
+    cfg.oplmode = take("sblaster", "oplmode");
     cfg.rate = take("mixer", "rate").and_then(|v| v.parse().ok());
     cfg.mididevice = take("midi", "mididevice");
+    cfg.mpu401 = take("midi", "mpu401");
+    cfg.soundfont = take("fluidsynth", "soundfont");
+    cfg.pcspeaker = take("speaker", "pcspeaker");
+    cfg.tandy = take("speaker", "tandy");
 
     // Remaining keys -> passthrough (drop now-empty sections).
     sections.retain(|_, keys| !keys.is_empty());
