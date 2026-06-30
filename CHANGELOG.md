@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-30
+
 ### Added
 - New **DOS** tab: reported **DOS version** (`ver`) and **country code** for
   games that expect a specific version or locale.
@@ -44,6 +46,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (it's obsolete), so the field did nothing. Use the new **Shader** (`glshader`)
   field instead. Existing `scaler` values are dropped on import and ignored when
   loading old profiles.
+
+### Internal
+- Modular refactor: large files split by concept (`dosbox_conf`, `actions`,
+  `profile`, `conf_import`, `editor_mounts`, `settings_dialog`, `wizard`,
+  `dosbox_form`) and `dosbox.conf` rendering simplified. README gains capability
+  screenshots. No user-facing behaviour change.
 
 ## [0.3.1] - 2026-06-30
 
@@ -113,7 +121,8 @@ Initial working frontend.
 - Import from `dosbox.conf` (D-Fend / DBGL) and zipped games (drag & drop).
 - Single AppImage bundling dosbox-staging while following the host GTK theme.
 
-[Unreleased]: https://github.com/lexandro/dosui/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/lexandro/dosui/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/lexandro/dosui/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/lexandro/dosui/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/lexandro/dosui/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/lexandro/dosui/compare/v0.1.0...v0.2.0
