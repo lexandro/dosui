@@ -51,6 +51,7 @@ pub fn open_for_edit(
     notebook.append_page(&run_page, Some(&Label::new(Some("Mounts & Run"))));
     let dos = DosboxForm::new(&profile.dosbox, INHERIT, false);
     notebook.append_page(&dos.cpu_page, Some(&Label::new(Some("CPU"))));
+    notebook.append_page(&dos.memory_page, Some(&Label::new(Some("Memory"))));
     notebook.append_page(&dos.graphics_page, Some(&Label::new(Some("Graphics"))));
     notebook.append_page(&dos.sound_page, Some(&Label::new(Some("Sound"))));
     let advanced_index =

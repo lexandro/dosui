@@ -39,6 +39,7 @@ pub fn open(parent: &ApplicationWindow, on_saved: Rc<dyn Fn()>) {
 
     let form = DosboxForm::new(&defaults, "(default)", true);
     notebook.append_page(&form.cpu_page, Some(&Label::new(Some("CPU"))));
+    notebook.append_page(&form.memory_page, Some(&Label::new(Some("Memory"))));
     notebook.append_page(&form.graphics_page, Some(&Label::new(Some("Graphics"))));
     notebook.append_page(&form.sound_page, Some(&Label::new(Some("Sound"))));
     let advanced_index =

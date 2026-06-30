@@ -163,6 +163,10 @@ fn parse_dosbox(mut sections: IndexMap<String, IndexMap<String, String>>) -> Dos
     cfg.vsync = take("sdl", "vsync");
     cfg.machine = take("dosbox", "machine");
     cfg.memsize = take("dosbox", "memsize").and_then(|v| v.parse().ok());
+    cfg.vmemsize = take("dosbox", "vmemsize");
+    cfg.xms = take("dos", "xms").map(|v| parse_bool(&v));
+    cfg.ems = take("dos", "ems");
+    cfg.umb = take("dos", "umb").map(|v| parse_bool(&v));
     cfg.core = take("cpu", "core");
     cfg.cputype = take("cpu", "cputype");
     cfg.cycles = take("cpu", "cycles");

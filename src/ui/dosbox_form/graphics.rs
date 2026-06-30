@@ -21,7 +21,6 @@ const MACHINE_OPTS: [&str; 8] = [
     "hercules",
 ];
 const ASPECT_OPTS: [&str; 3] = [DEFAULT, "on", "off"];
-const MEMSIZE_PRESETS: [&str; 6] = ["1", "4", "8", "16", "32", "64"];
 // glshader is open-ended (dozens of named shaders); offer the common ones and
 // let the user type any name. Exotic shaders still work via the Advanced tab.
 const GLSHADER_PRESETS: [&str; 5] = [
@@ -36,7 +35,6 @@ const DEF_OUTPUT: &str = "opengl";
 const DEF_FULLSCREEN: &str = "off";
 const DEF_VSYNC: &str = "auto";
 const DEF_MACHINE: &str = "svga_s3";
-const DEF_MEMSIZE: &str = "16";
 const DEF_GLSHADER: &str = "crt-auto";
 const DEF_ASPECT: &str = "auto";
 
@@ -46,7 +44,6 @@ pub(super) struct Widgets {
     fullscreen: DropDown,
     vsync: DropDown,
     machine: DropDown,
-    memsize: Entry,
     glshader: Entry,
     aspect: DropDown,
 }
@@ -83,14 +80,6 @@ pub(super) fn build(config: &DosboxConfig, ctx: &Ctx) -> (GtkBox, Widgets) {
         &ctx.sentinel(DEF_MACHINE),
     );
     page.append(&row);
-    let memsize_cur = config.memsize.map(|v| v.to_string()).unwrap_or_default();
-    let (row, memsize) = widgets::combo_row(
-        "Memory (MB)",
-        &MEMSIZE_PRESETS,
-        &memsize_cur,
-        &ctx.placeholder(DEF_MEMSIZE),
-    );
-    page.append(&row);
     let (row, glshader) = widgets::combo_row(
         "Shader",
         &GLSHADER_PRESETS,
@@ -113,7 +102,6 @@ pub(super) fn build(config: &DosboxConfig, ctx: &Ctx) -> (GtkBox, Widgets) {
             fullscreen,
             vsync,
             machine,
-            memsize,
             glshader,
             aspect,
         },
@@ -127,7 +115,6 @@ impl Widgets {
         cfg.fullscreen = cfg_bool(&self.fullscreen);
         cfg.vsync = cfg_opt(&self.vsync);
         cfg.machine = cfg_opt(&self.machine);
-        cfg.memsize = widgets::none_if_empty(&self.memsize.text()).and_then(|s| s.parse().ok());
         cfg.glshader = widgets::none_if_empty(&self.glshader.text());
         cfg.aspect = cfg_bool(&self.aspect);
     }

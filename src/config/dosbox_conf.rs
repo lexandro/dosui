@@ -39,6 +39,18 @@ pub struct DosboxConfig {
     /// `[dosbox] memsize` (MB)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub memsize: Option<u32>,
+    /// `[dosbox] vmemsize` — video memory (auto / 1 / 2 / 4 / 8 MB)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vmemsize: Option<String>,
+    /// `[dos] xms` — Extended Memory
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xms: Option<bool>,
+    /// `[dos] ems` — Expanded Memory (true / emsboard / emm386 / false)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ems: Option<String>,
+    /// `[dos] umb` — Upper Memory Blocks
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub umb: Option<bool>,
     /// `[cpu] core` — auto / normal / dynamic / …
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub core: Option<String>,
@@ -117,6 +129,10 @@ impl DosboxConfig {
             vsync: pick(&overrides.vsync, &self.vsync),
             machine: pick(&overrides.machine, &self.machine),
             memsize: overrides.memsize.or(self.memsize),
+            vmemsize: pick(&overrides.vmemsize, &self.vmemsize),
+            xms: overrides.xms.or(self.xms),
+            ems: pick(&overrides.ems, &self.ems),
+            umb: overrides.umb.or(self.umb),
             core: pick(&overrides.core, &self.core),
             cputype: pick(&overrides.cputype, &self.cputype),
             cycles: pick(&overrides.cycles, &self.cycles),
@@ -157,6 +173,18 @@ impl DosboxConfig {
         }
         if let Some(v) = self.memsize {
             put(&mut sections, "dosbox", "memsize", v.to_string());
+        }
+        if let Some(v) = &self.vmemsize {
+            put(&mut sections, "dosbox", "vmemsize", v.clone());
+        }
+        if let Some(v) = self.xms {
+            put(&mut sections, "dos", "xms", bool_str(v));
+        }
+        if let Some(v) = &self.ems {
+            put(&mut sections, "dos", "ems", v.clone());
+        }
+        if let Some(v) = self.umb {
+            put(&mut sections, "dos", "umb", bool_str(v));
         }
         if let Some(v) = &self.core {
             put(&mut sections, "cpu", "core", v.clone());
@@ -383,6 +411,23 @@ mod tests {
         assert!(conf.contains("fullscreen = true\n"));
         assert!(conf.contains("vsync = on\n"));
         assert!(conf.contains("[render]\nglshader = sharp\n"));
+    }
+
+    #[test]
+    fn memory_keys_render_into_dosbox_and_dos() {
+        let conf = DosboxConfig {
+            vmemsize: Some("4".into()),
+            xms: Some(true),
+            ems: Some("emm386".into()),
+            umb: Some(false),
+            ..Default::default()
+        }
+        .render(&run(false));
+        assert!(conf.contains("vmemsize = 4\n"));
+        assert!(conf.contains("[dos]\n"));
+        assert!(conf.contains("xms = true\n"));
+        assert!(conf.contains("ems = emm386\n"));
+        assert!(conf.contains("umb = false\n"));
     }
 
     #[test]

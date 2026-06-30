@@ -10,6 +10,7 @@
 mod advanced;
 mod cpu;
 mod graphics;
+mod memory;
 mod rows;
 mod sound;
 
@@ -22,11 +23,13 @@ use rows::Ctx;
 /// The DOSBox tab pages plus the per-tab widgets read on save.
 pub struct DosboxForm {
     pub cpu_page: GtkBox,
+    pub memory_page: GtkBox,
     pub graphics_page: GtkBox,
     pub sound_page: GtkBox,
     pub advanced_page: GtkBox,
 
     cpu: cpu::Widgets,
+    memory: memory::Widgets,
     graphics: graphics::Widgets,
     sound: sound::Widgets,
     advanced: advanced::Widgets,
@@ -44,16 +47,19 @@ impl DosboxForm {
         };
 
         let (cpu_page, cpu) = cpu::build(config, &ctx);
+        let (memory_page, memory) = memory::build(config, &ctx);
         let (graphics_page, graphics) = graphics::build(config, &ctx);
         let (sound_page, sound) = sound::build(config, &ctx);
         let (advanced_page, advanced) = advanced::build(config);
 
         DosboxForm {
             cpu_page,
+            memory_page,
             graphics_page,
             sound_page,
             advanced_page,
             cpu,
+            memory,
             graphics,
             sound,
             advanced,
@@ -64,6 +70,7 @@ impl DosboxForm {
     pub fn collect(&self) -> DosboxConfig {
         let mut cfg = DosboxConfig::default();
         self.cpu.apply(&mut cfg);
+        self.memory.apply(&mut cfg);
         self.graphics.apply(&mut cfg);
         self.sound.apply(&mut cfg);
         self.advanced.apply(&mut cfg);

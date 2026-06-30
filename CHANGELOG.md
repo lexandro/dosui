@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- New **Memory** tab: RAM size (moved here from Graphics), **Video memory**
+  (`vmemsize`), and the DOS memory managers **XMS**, **EMS** (true/emsboard/
+  emm386/false), and **UMB** — common knobs for old games that need EMS/XMS off.
 - Graphics tab: **Fullscreen** and **VSync** (auto/on/adaptive/off) options, and a
   **Shader** field (`[render] glshader`) with common presets (sharp, crt-auto, …)
   that also accepts any shader name.
