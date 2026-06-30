@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-30
+
 ### Added
 - Desktop integration (AppImage only): on first launch dosui *asks* whether to
   add shortcuts; on confirmation it installs an applications-menu entry and a
@@ -60,6 +62,7 @@ Initial working frontend.
 - Import from `dosbox.conf` (D-Fend / DBGL) and zipped games (drag & drop).
 - Single AppImage bundling dosbox-staging while following the host GTK theme.
 
-[Unreleased]: https://github.com/lexandro/dosui/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/lexandro/dosui/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/lexandro/dosui/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/lexandro/dosui/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/lexandro/dosui/releases/tag/v0.1.0
