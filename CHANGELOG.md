@@ -9,10 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Desktop integration (AppImage only): on first launch dosui *asks* whether to
-  add shortcuts; on confirmation it installs an applications-menu entry plus a
-  launcher on your desktop (executable and marked trusted), with the icon. The
-  answer is remembered so it never nags, and you can (re)add the shortcuts
-  anytime from Settings. Skipped for installed or dev runs.
+  add shortcuts; on confirmation it installs an applications-menu entry and a
+  launcher on your desktop (executable, marked trusted) plus the icon. The
+  answer is remembered so it never nags. **Settings ▸ Application** has *Add* and
+  *Remove* buttons to manage the shortcuts anytime. Skipped for installed/dev runs.
+- Command-line interface: `dosui --help`, `--version`, `--install`, and
+  `--uninstall` (the last two add/remove the menu + desktop shortcuts headlessly).
 
 ### Changed
 - Bundle dosbox-staging 0.82.2 (was 0.82.0) in the AppImage.

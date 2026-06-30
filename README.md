@@ -107,6 +107,20 @@ dosui follows the XDG base-directory spec:
 dosui's own files are **TOML**. The generated `dosbox.conf` is an output
 artifact — never a source of truth.
 
+### Command-line options
+
+With no option dosui launches its GUI. It also accepts:
+
+```
+dosui --install      add applications-menu and desktop shortcuts (AppImage)
+dosui --uninstall    remove those shortcuts
+dosui --version      print the version
+dosui --help         show this help
+```
+
+When run as an AppImage, dosui offers to add the shortcuts on first launch and
+exposes the same *Add* / *Remove* actions under **Settings ▸ Application**.
+
 ## Packaging an AppImage
 
 ```sh

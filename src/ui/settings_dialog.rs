@@ -132,8 +132,8 @@ fn build_app_tab(settings: &AppSettings, window: &Window) -> (GtkBox, Entry) {
     let (row, dosbox_path, browse) = widgets::file_row("DOSBox binary", &current);
     page.append(&row);
 
-    // AppImage only: a button to (re)add the menu + desktop shortcuts on demand.
-    if std::env::var_os("APPIMAGE").is_some() {
+    // AppImage only: add/remove the menu + desktop shortcuts on demand.
+    if crate::integration::is_appimage() {
         page.append(
             &Label::builder()
                 .label("Shortcuts let you launch dosui without locating the AppImage file.")
@@ -142,13 +142,35 @@ fn build_app_tab(settings: &AppSettings, window: &Window) -> (GtkBox, Entry) {
                 .css_classes(["dim-label"])
                 .build(),
         );
-        let add = Button::builder()
-            .label("Add to applications menu & desktop")
+        let add = Button::with_label("Add to applications menu & desktop");
+        let remove = Button::with_label("Remove from menu & desktop");
+        remove.set_sensitive(crate::integration::is_installed());
+
+        let row = GtkBox::builder()
+            .orientation(Orientation::Horizontal)
+            .spacing(8)
             .halign(gtk::Align::Start)
             .build();
-        let win = window.clone();
-        add.connect_clicked(move |_| crate::ui::desktop_integration::integrate_now(&win));
-        page.append(&add);
+        row.append(&add);
+        row.append(&remove);
+        page.append(&row);
+
+        {
+            let win = window.clone();
+            let remove = remove.clone();
+            add.connect_clicked(move |_| {
+                crate::ui::desktop_integration::integrate_now(&win);
+                remove.set_sensitive(true);
+            });
+        }
+        {
+            let win = window.clone();
+            let remove2 = remove.clone();
+            remove.connect_clicked(move |_| {
+                crate::ui::desktop_integration::uninstall_now(&win);
+                remove2.set_sensitive(false);
+            });
+        }
     }
 
     {

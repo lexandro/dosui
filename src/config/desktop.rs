@@ -2,8 +2,9 @@
 //! applications menu and onto their desktop, so a portable AppImage shows up in
 //! the system like an installed app.
 //!
-//! This module is GTK-free and only writes files; the *decision* to integrate
-//! (the user prompt) and the file-manager "trusted" flag live in the UI layer.
+//! This module is GTK-free and only writes/removes files; the orchestration and
+//! the file-manager "trusted" flag (which needs GIO) live in
+//! [`crate::integration`], and the user prompt lives in the UI layer.
 //! Everything takes explicit directories so it is unit-testable against temp
 //! dirs. The embedded `.desktop` has its `Exec=` line replaced with the path of
 //! the running binary at install time.
@@ -87,6 +88,29 @@ fn make_executable(_path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Remove the applications-menu entry and its icon. Returns whether anything
+/// was actually removed.
+pub fn remove_menu(data_home: &Path) -> Result<bool> {
+    let entry = remove_if_present(&menu_entry_path(data_home))?;
+    let icon =
+        remove_if_present(&data_home.join(format!("icons/hicolor/scalable/apps/{APP_ID}.svg")))?;
+    Ok(entry || icon)
+}
+
+/// Remove the desktop-surface launcher. Returns whether it was present.
+pub fn remove_desktop_launcher(desktop_dir: &Path) -> Result<bool> {
+    remove_if_present(&desktop_launcher_path(desktop_dir))
+}
+
+/// Delete `path` if it exists; `Ok(false)` when it was already absent.
+fn remove_if_present(path: &Path) -> Result<bool> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(e).with_context(|| format!("removing {}", path.display())),
+    }
+}
+
 /// The embedded `.desktop` with its `Exec=` line pointed at `exec`. Paths with
 /// spaces are quoted, as the desktop-entry spec requires.
 fn desktop_contents(exec: &Path) -> String {
@@ -144,6 +168,33 @@ mod tests {
         assert!(fs::read_to_string(menu_entry_path(home))
             .unwrap()
             .contains("Exec=/opt/dosui.AppImage"));
+    }
+
+    #[test]
+    fn remove_menu_deletes_entry_and_icon() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path();
+        install_menu(home, Path::new("/opt/dosui.AppImage")).unwrap();
+        assert!(menu_entry_present(home));
+
+        assert!(remove_menu(home).unwrap(), "removed something");
+        assert!(!menu_entry_present(home));
+        assert!(!home
+            .join("icons/hicolor/scalable/apps/io.github.dosui.svg")
+            .exists());
+        assert!(!remove_menu(home).unwrap(), "second remove is a no-op");
+    }
+
+    #[test]
+    fn remove_desktop_launcher_deletes_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        install_desktop_launcher(dir, Path::new("/opt/dosui.AppImage")).unwrap();
+        assert!(desktop_launcher_present(dir));
+
+        assert!(remove_desktop_launcher(dir).unwrap());
+        assert!(!desktop_launcher_present(dir));
+        assert!(!remove_desktop_launcher(dir).unwrap());
     }
 
     #[test]
