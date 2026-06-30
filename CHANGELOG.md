@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tidier Settings ▸ Application: grouped sections (DOSBox, Desktop shortcuts)
   each with a heading, description, and framed content; the Add/Remove shortcut
   buttons are stacked and equal-width.
+- DOSBox settings: Cycles, Memory, and Mixer-rate are now free-text fields (with
+  a presets dropdown), so you can type any value — e.g. a custom cycles count —
+  instead of only picking from a list.
+- "Default" now shows the DOSBox built-in value in the global Settings (e.g.
+  `(default) · svga_s3`, Cycles placeholder `auto`), so it's clear what leaving a
+  field unset actually does.
 
 ## [0.3.1] - 2026-06-30
 

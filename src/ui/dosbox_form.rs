@@ -9,7 +9,7 @@
 //! read-back of the same struct) plus its inline tests.
 
 use gtk::prelude::*;
-use gtk::{Box as GtkBox, DropDown, Label, ScrolledWindow, TextView};
+use gtk::{Box as GtkBox, DropDown, Entry, Label, ScrolledWindow, TextView};
 use indexmap::IndexMap;
 
 use crate::config::dosbox_conf::DosboxConfig;
@@ -31,7 +31,6 @@ const MACHINE_OPTS: [&str; 8] = [
     "cga",
     "hercules",
 ];
-const MEMSIZE_OPTS: [&str; 7] = [DEFAULT, "1", "4", "8", "16", "32", "64"];
 const CORE_OPTS: [&str; 5] = [DEFAULT, "auto", "normal", "dynamic", "simple"];
 const CPUTYPE_OPTS: [&str; 6] = [
     DEFAULT,
@@ -41,20 +40,37 @@ const CPUTYPE_OPTS: [&str; 6] = [
     "486_slow",
     "pentium_slow",
 ];
-const CYCLES_OPTS: [&str; 7] = [
-    DEFAULT,
+const SCALER_OPTS: [&str; 4] = [DEFAULT, "none", "normal2x", "normal3x"];
+const ASPECT_OPTS: [&str; 3] = [DEFAULT, "on", "off"];
+const SBTYPE_OPTS: [&str; 6] = [DEFAULT, "sb16", "sbpro2", "sb2", "gb", "none"];
+const MIDI_OPTS: [&str; 5] = [DEFAULT, "auto", "mt32", "fluidsynth", "none"];
+
+// Presets for the editable (free-text) value fields — the user can also type
+// any value (e.g. an arbitrary cycles count).
+const CYCLES_PRESETS: [&str; 6] = [
     "auto",
     "max",
     "fixed 3000",
     "fixed 10000",
     "fixed 20000",
-    "fixed 30000",
+    "30000",
 ];
-const SCALER_OPTS: [&str; 4] = [DEFAULT, "none", "normal2x", "normal3x"];
-const ASPECT_OPTS: [&str; 3] = [DEFAULT, "on", "off"];
-const SBTYPE_OPTS: [&str; 6] = [DEFAULT, "sb16", "sbpro2", "sb2", "gb", "none"];
-const RATE_OPTS: [&str; 6] = [DEFAULT, "22050", "32000", "44100", "48000", "49716"];
-const MIDI_OPTS: [&str; 5] = [DEFAULT, "auto", "mt32", "fluidsynth", "none"];
+const MEMSIZE_PRESETS: [&str; 6] = ["1", "4", "8", "16", "32", "64"];
+const RATE_PRESETS: [&str; 5] = ["22050", "32000", "44100", "48000", "49716"];
+
+// DOSBox-staging built-in defaults, surfaced next to "Default" so it's clear
+// what leaving a field unset actually does.
+const DEF_CORE: &str = "auto";
+const DEF_CPUTYPE: &str = "auto";
+const DEF_CYCLES: &str = "auto";
+const DEF_OUTPUT: &str = "opengl";
+const DEF_MACHINE: &str = "svga_s3";
+const DEF_MEMSIZE: &str = "16";
+const DEF_ASPECT: &str = "auto";
+const DEF_SCALER: &str = "none";
+const DEF_SBTYPE: &str = "sb16";
+const DEF_RATE: &str = "48000";
+const DEF_MIDI: &str = "auto";
 
 /// The DOSBox tab pages plus the widgets read on save.
 pub struct DosboxForm {
@@ -65,14 +81,14 @@ pub struct DosboxForm {
 
     output: DropDown,
     machine: DropDown,
-    memsize: DropDown,
+    memsize: Entry,
     scaler: DropDown,
     aspect: DropDown,
     core: DropDown,
     cputype: DropDown,
-    cycles: DropDown,
+    cycles: Entry,
     sbtype: DropDown,
-    rate: DropDown,
+    rate: Entry,
     mididevice: DropDown,
     passthrough: TextView,
     preview: TextView,
@@ -81,22 +97,45 @@ pub struct DosboxForm {
 impl DosboxForm {
     /// Build the tabs from `config`. `default_label` is the sentinel text shown
     /// for unset values ("(default)" for global defaults, "(inherit)" for a profile).
-    pub fn new(config: &DosboxConfig, default_label: &str) -> DosboxForm {
+    pub fn new(config: &DosboxConfig, default_label: &str, show_builtin: bool) -> DosboxForm {
+        // Unset-dropdown text: append the DOSBox built-in value (Settings only)
+        // so "Default" actually says what it does.
+        let sentinel = |builtin: &str| -> String {
+            if show_builtin {
+                format!("{default_label} · {builtin}")
+            } else {
+                default_label.to_string()
+            }
+        };
+        // Placeholder shown in an empty editable field.
+        let placeholder = |builtin: &str| -> String {
+            if show_builtin {
+                builtin.to_string()
+            } else {
+                default_label.to_string()
+            }
+        };
+
         let cpu_page = widgets::page();
-        let (row, core) = config_row("Core", &CORE_OPTS, config.core.as_deref(), default_label);
+        let (row, core) = config_row(
+            "Core",
+            &CORE_OPTS,
+            config.core.as_deref(),
+            &sentinel(DEF_CORE),
+        );
         cpu_page.append(&row);
         let (row, cputype) = config_row(
             "CPU type",
             &CPUTYPE_OPTS,
             config.cputype.as_deref(),
-            default_label,
+            &sentinel(DEF_CPUTYPE),
         );
         cpu_page.append(&row);
-        let (row, cycles) = config_row(
+        let (row, cycles) = widgets::combo_row(
             "Cycles",
-            &CYCLES_OPTS,
-            config.cycles.as_deref(),
-            default_label,
+            &CYCLES_PRESETS,
+            widgets::opt(&config.cycles),
+            &placeholder(DEF_CYCLES),
         );
         cpu_page.append(&row);
 
@@ -105,34 +144,38 @@ impl DosboxForm {
             "Output",
             &OUTPUT_OPTS,
             config.output.as_deref(),
-            default_label,
+            &sentinel(DEF_OUTPUT),
         );
         graphics_page.append(&row);
         let (row, machine) = config_row(
             "Machine",
             &MACHINE_OPTS,
             config.machine.as_deref(),
-            default_label,
+            &sentinel(DEF_MACHINE),
         );
         graphics_page.append(&row);
-        let memsize_cur = config.memsize.map(|v| v.to_string());
-        let (row, memsize) = config_row(
+        let memsize_cur = config.memsize.map(|v| v.to_string()).unwrap_or_default();
+        let (row, memsize) = widgets::combo_row(
             "Memory (MB)",
-            &MEMSIZE_OPTS,
-            memsize_cur.as_deref(),
-            default_label,
+            &MEMSIZE_PRESETS,
+            &memsize_cur,
+            &placeholder(DEF_MEMSIZE),
         );
         graphics_page.append(&row);
         let (row, scaler) = config_row(
             "Scaler",
             &SCALER_OPTS,
             config.scaler.as_deref(),
-            default_label,
+            &sentinel(DEF_SCALER),
         );
         graphics_page.append(&row);
         let aspect_cur = config.aspect.map(|b| if b { "on" } else { "off" });
-        let (row, aspect) =
-            config_row("Aspect correction", &ASPECT_OPTS, aspect_cur, default_label);
+        let (row, aspect) = config_row(
+            "Aspect correction",
+            &ASPECT_OPTS,
+            aspect_cur,
+            &sentinel(DEF_ASPECT),
+        );
         graphics_page.append(&row);
 
         let sound_page = widgets::page();
@@ -140,22 +183,22 @@ impl DosboxForm {
             "Sound Blaster",
             &SBTYPE_OPTS,
             config.sbtype.as_deref(),
-            default_label,
+            &sentinel(DEF_SBTYPE),
         );
         sound_page.append(&row);
-        let rate_cur = config.rate.map(|v| v.to_string());
-        let (row, rate) = config_row(
+        let rate_cur = config.rate.map(|v| v.to_string()).unwrap_or_default();
+        let (row, rate) = widgets::combo_row(
             "Mixer rate (Hz)",
-            &RATE_OPTS,
-            rate_cur.as_deref(),
-            default_label,
+            &RATE_PRESETS,
+            &rate_cur,
+            &placeholder(DEF_RATE),
         );
         sound_page.append(&row);
         let (row, mididevice) = config_row(
             "MIDI device",
             &MIDI_OPTS,
             config.mididevice.as_deref(),
-            default_label,
+            &sentinel(DEF_MIDI),
         );
         sound_page.append(&row);
 
@@ -199,14 +242,14 @@ impl DosboxForm {
         DosboxConfig {
             output: cfg_opt(&self.output),
             machine: cfg_opt(&self.machine),
-            memsize: cfg_opt(&self.memsize).and_then(|s| s.parse().ok()),
+            memsize: widgets::none_if_empty(&self.memsize.text()).and_then(|s| s.parse().ok()),
             core: cfg_opt(&self.core),
             cputype: cfg_opt(&self.cputype),
-            cycles: cfg_opt(&self.cycles),
+            cycles: widgets::none_if_empty(&self.cycles.text()),
             aspect: cfg_bool(&self.aspect),
             scaler: cfg_opt(&self.scaler),
             sbtype: cfg_opt(&self.sbtype),
-            rate: cfg_opt(&self.rate).and_then(|s| s.parse().ok()),
+            rate: widgets::none_if_empty(&self.rate.text()).and_then(|s| s.parse().ok()),
             mididevice: cfg_opt(&self.mididevice),
             passthrough: parse_passthrough(&widgets::textview_text(&self.passthrough)),
         }
@@ -218,23 +261,23 @@ impl DosboxForm {
     }
 }
 
-/// A config dropdown row: curated `base` options (sentinel relabelled to
-/// `default_label`), plus the current value if not listed.
+/// A config dropdown row: curated `base` options (sentinel at index 0 relabelled
+/// to `sentinel`), plus the current value if it isn't already listed.
 fn config_row(
     label: &str,
     base: &[&str],
     current: Option<&str>,
-    default_label: &str,
+    sentinel: &str,
 ) -> (GtkBox, DropDown) {
     let current = current.filter(|c| !c.is_empty());
     let mut opts: Vec<&str> = base.to_vec();
-    opts[0] = default_label; // relabel the sentinel
+    opts[0] = sentinel; // relabel the sentinel (index 0 stays the "unset" option)
     if let Some(c) = current {
         if !opts.contains(&c) {
             opts.insert(1, c);
         }
     }
-    widgets::dropdown_row(label, &opts, Some(current.unwrap_or(default_label)))
+    widgets::dropdown_row(label, &opts, Some(current.unwrap_or(sentinel)))
 }
 
 /// Selected dropdown text, treating the sentinel (always index 0) as `None`.

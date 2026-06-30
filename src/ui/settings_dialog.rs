@@ -37,7 +37,7 @@ pub fn open(parent: &ApplicationWindow, on_saved: Rc<dyn Fn()>) {
     let (app_page, dosbox_path) = build_app_tab(&settings, &window);
     notebook.append_page(&app_page, Some(&Label::new(Some("Application"))));
 
-    let form = DosboxForm::new(&defaults, "(default)");
+    let form = DosboxForm::new(&defaults, "(default)", true);
     notebook.append_page(&form.cpu_page, Some(&Label::new(Some("CPU"))));
     notebook.append_page(&form.graphics_page, Some(&Label::new(Some("Graphics"))));
     notebook.append_page(&form.sound_page, Some(&Label::new(Some("Sound"))));

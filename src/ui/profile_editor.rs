@@ -49,7 +49,7 @@ pub fn open_for_edit(
     notebook.append_page(&general_page, Some(&Label::new(Some("General"))));
     let (run_page, run) = editor_mounts::build(&profile, &window);
     notebook.append_page(&run_page, Some(&Label::new(Some("Mounts & Run"))));
-    let dos = DosboxForm::new(&profile.dosbox, INHERIT);
+    let dos = DosboxForm::new(&profile.dosbox, INHERIT, false);
     notebook.append_page(&dos.cpu_page, Some(&Label::new(Some("CPU"))));
     notebook.append_page(&dos.graphics_page, Some(&Label::new(Some("Graphics"))));
     notebook.append_page(&dos.sound_page, Some(&Label::new(Some("Sound"))));

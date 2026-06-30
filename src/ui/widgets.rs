@@ -71,6 +71,41 @@ pub fn file_row(label: &str, value: &str) -> (GtkBox, Entry, Button) {
     (labeled(label, &inner), entry, browse)
 }
 
+/// Editable value row: a free-text entry plus a small presets dropdown that
+/// fills it. Returns the entry (the value source); `placeholder` shows when it
+/// is empty. Lets the user type any value while still offering common presets.
+pub fn combo_row(label: &str, presets: &[&str], value: &str, placeholder: &str) -> (GtkBox, Entry) {
+    let entry = Entry::builder()
+        .text(value)
+        .placeholder_text(placeholder)
+        .hexpand(true)
+        .build();
+
+    let mut opts = vec!["Presets…"];
+    opts.extend_from_slice(presets);
+    let dd = DropDown::from_strings(&opts);
+    {
+        let entry = entry.clone();
+        dd.connect_selected_notify(move |dd| {
+            if dd.selected() == 0 {
+                return; // the "Presets…" hint, not a value
+            }
+            if let Some(text) = dropdown_selected(dd) {
+                entry.set_text(&text);
+            }
+            dd.set_selected(0); // snap back to the hint; the entry holds the value
+        });
+    }
+
+    let inner = GtkBox::builder()
+        .orientation(Orientation::Horizontal)
+        .spacing(6)
+        .build();
+    inner.append(&entry);
+    inner.append(&dd);
+    (labeled(label, &inner), entry)
+}
+
 /// A dropdown pre-selected to `selected` (by matching text), if present.
 pub fn dropdown(options: &[&str], selected: Option<&str>) -> DropDown {
     let dd = DropDown::from_strings(options);
