@@ -59,6 +59,15 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="0.3.1" date="2026-06-30">
+      <description>
+        <p>Application icon and desktop-integration fixes.</p>
+        <ul>
+          <li>New application icon with transparent corners, at all sizes.</li>
+          <li>Shortcuts refresh the icon/desktop caches so the icon shows immediately.</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.3.0" date="2026-06-30">
       <description>
         <p>Desktop integration and a command-line interface.</p>
