@@ -115,6 +115,24 @@ pub struct DosboxConfig {
     /// `[speaker] tandy` — Tandy/PCjr 3-voice sound (auto / on / off)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tandy: Option<String>,
+    /// `[dos] keyboardlayout` — auto / us / uk / de / hu / …
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keyboardlayout: Option<String>,
+    /// `[mouse] mouse_capture` — onclick / onstart / seamless / nomouse
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mouse_capture: Option<String>,
+    /// `[mouse] mouse_sensitivity` — percent (e.g. 100)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mouse_sensitivity: Option<String>,
+    /// `[joystick] joysticktype` — auto / 2axis / 4axis / fcs / ch / disabled / …
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub joysticktype: Option<String>,
+    /// `[joystick] autofire`
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub joy_autofire: Option<bool>,
+    /// `[joystick] swap34` — swap buttons 3 and 4
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub joy_swap34: Option<bool>,
 
     /// Advanced / unmodeled keys: section -> (key -> value), order preserved.
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
@@ -169,6 +187,12 @@ impl DosboxConfig {
             soundfont: pick(&overrides.soundfont, &self.soundfont),
             pcspeaker: pick(&overrides.pcspeaker, &self.pcspeaker),
             tandy: pick(&overrides.tandy, &self.tandy),
+            keyboardlayout: pick(&overrides.keyboardlayout, &self.keyboardlayout),
+            mouse_capture: pick(&overrides.mouse_capture, &self.mouse_capture),
+            mouse_sensitivity: pick(&overrides.mouse_sensitivity, &self.mouse_sensitivity),
+            joysticktype: pick(&overrides.joysticktype, &self.joysticktype),
+            joy_autofire: overrides.joy_autofire.or(self.joy_autofire),
+            joy_swap34: overrides.joy_swap34.or(self.joy_swap34),
             passthrough,
         }
     }
@@ -205,6 +229,24 @@ impl DosboxConfig {
         }
         if let Some(v) = self.umb {
             put(&mut sections, "dos", "umb", bool_str(v));
+        }
+        if let Some(v) = &self.keyboardlayout {
+            put(&mut sections, "dos", "keyboardlayout", v.clone());
+        }
+        if let Some(v) = &self.mouse_capture {
+            put(&mut sections, "mouse", "mouse_capture", v.clone());
+        }
+        if let Some(v) = &self.mouse_sensitivity {
+            put(&mut sections, "mouse", "mouse_sensitivity", v.clone());
+        }
+        if let Some(v) = &self.joysticktype {
+            put(&mut sections, "joystick", "joysticktype", v.clone());
+        }
+        if let Some(v) = self.joy_autofire {
+            put(&mut sections, "joystick", "autofire", bool_str(v));
+        }
+        if let Some(v) = self.joy_swap34 {
+            put(&mut sections, "joystick", "swap34", bool_str(v));
         }
         if let Some(v) = &self.core {
             put(&mut sections, "cpu", "core", v.clone());
@@ -482,6 +524,28 @@ mod tests {
         assert!(conf.contains("[speaker]\n"));
         assert!(conf.contains("pcspeaker = discrete\n"));
         assert!(conf.contains("tandy = on\n"));
+    }
+
+    #[test]
+    fn input_keys_render_into_dos_mouse_joystick() {
+        let conf = DosboxConfig {
+            keyboardlayout: Some("hu".into()),
+            mouse_capture: Some("seamless".into()),
+            mouse_sensitivity: Some("80".into()),
+            joysticktype: Some("4axis".into()),
+            joy_autofire: Some(true),
+            joy_swap34: Some(false),
+            ..Default::default()
+        }
+        .render(&run(false));
+        assert!(conf.contains("keyboardlayout = hu\n"));
+        assert!(conf.contains("[mouse]\n"));
+        assert!(conf.contains("mouse_capture = seamless\n"));
+        assert!(conf.contains("mouse_sensitivity = 80\n"));
+        assert!(conf.contains("[joystick]\n"));
+        assert!(conf.contains("joysticktype = 4axis\n"));
+        assert!(conf.contains("autofire = true\n"));
+        assert!(conf.contains("swap34 = false\n"));
     }
 
     #[test]

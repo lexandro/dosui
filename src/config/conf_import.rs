@@ -181,6 +181,12 @@ fn parse_dosbox(mut sections: IndexMap<String, IndexMap<String, String>>) -> Dos
     cfg.soundfont = take("fluidsynth", "soundfont");
     cfg.pcspeaker = take("speaker", "pcspeaker");
     cfg.tandy = take("speaker", "tandy");
+    cfg.keyboardlayout = take("dos", "keyboardlayout");
+    cfg.mouse_capture = take("mouse", "mouse_capture");
+    cfg.mouse_sensitivity = take("mouse", "mouse_sensitivity");
+    cfg.joysticktype = take("joystick", "joysticktype");
+    cfg.joy_autofire = take("joystick", "autofire").map(|v| parse_bool(&v));
+    cfg.joy_swap34 = take("joystick", "swap34").map(|v| parse_bool(&v));
 
     // Remaining keys -> passthrough (drop now-empty sections).
     sections.retain(|_, keys| !keys.is_empty());

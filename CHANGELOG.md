@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- New **Input** tab: keyboard **Layout**, **Mouse** (capture mode, sensitivity),
+  and **Joystick** (type, autofire, swap buttons 3 & 4).
 - Sound tab now also covers: **OPL mode** (FM synth model) for Sound Blaster,
   **MPU-401** mode and a **SoundFont** picker for MIDI (General MIDI via
   FluidSynth), and a **PC speaker / Tandy** group — first-class fields instead

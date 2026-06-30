@@ -10,6 +10,7 @@
 mod advanced;
 mod cpu;
 mod graphics;
+mod input;
 mod memory;
 mod rows;
 mod sound;
@@ -26,12 +27,14 @@ pub struct DosboxForm {
     pub memory_page: GtkBox,
     pub graphics_page: GtkBox,
     pub sound_page: GtkBox,
+    pub input_page: GtkBox,
     pub advanced_page: GtkBox,
 
     cpu: cpu::Widgets,
     memory: memory::Widgets,
     graphics: graphics::Widgets,
     sound: sound::Widgets,
+    input: input::Widgets,
     advanced: advanced::Widgets,
 }
 
@@ -50,6 +53,7 @@ impl DosboxForm {
         let (memory_page, memory) = memory::build(config, &ctx);
         let (graphics_page, graphics) = graphics::build(config, &ctx);
         let (sound_page, sound) = sound::build(config, &ctx);
+        let (input_page, input) = input::build(config, &ctx);
         let (advanced_page, advanced) = advanced::build(config);
 
         DosboxForm {
@@ -57,11 +61,13 @@ impl DosboxForm {
             memory_page,
             graphics_page,
             sound_page,
+            input_page,
             advanced_page,
             cpu,
             memory,
             graphics,
             sound,
+            input,
             advanced,
         }
     }
@@ -73,6 +79,7 @@ impl DosboxForm {
         self.memory.apply(&mut cfg);
         self.graphics.apply(&mut cfg);
         self.sound.apply(&mut cfg);
+        self.input.apply(&mut cfg);
         self.advanced.apply(&mut cfg);
         cfg
     }

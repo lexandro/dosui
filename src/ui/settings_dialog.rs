@@ -42,6 +42,7 @@ pub fn open(parent: &ApplicationWindow, on_saved: Rc<dyn Fn()>) {
     notebook.append_page(&form.memory_page, Some(&Label::new(Some("Memory"))));
     notebook.append_page(&form.graphics_page, Some(&Label::new(Some("Graphics"))));
     notebook.append_page(&form.sound_page, Some(&Label::new(Some("Sound"))));
+    notebook.append_page(&form.input_page, Some(&Label::new(Some("Input"))));
     let advanced_index =
         notebook.append_page(&form.advanced_page, Some(&Label::new(Some("Advanced"))));
 
