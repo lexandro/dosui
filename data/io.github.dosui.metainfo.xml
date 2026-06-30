@@ -38,8 +38,12 @@
 
   <screenshots>
     <screenshot type="default">
-      <caption>The dosui main window</caption>
-      <image>https://raw.githubusercontent.com/lexandro/dosui/main/docs/screenshot.png</image>
+      <caption>The profile library</caption>
+      <image>https://raw.githubusercontent.com/lexandro/dosui/main/docs/screenshots/library.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The profile editor's Sound tab</caption>
+      <image>https://raw.githubusercontent.com/lexandro/dosui/main/docs/screenshots/sound.png</image>
     </screenshot>
   </screenshots>
 

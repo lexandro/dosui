@@ -10,7 +10,7 @@ runtime and without the Windows baggage.
 [![Built with Rust](https://img.shields.io/badge/built%20with-Rust-orange.svg?logo=rust)](https://www.rust-lang.org/)
 [![GTK4](https://img.shields.io/badge/GTK-4-729fcf.svg?logo=gnome)](https://www.gtk.org/)
 
-![dosui main window](docs/screenshot.png)
+![dosui — the profile library](docs/screenshots/library.png)
 
 ## Why dosui?
 
@@ -25,8 +25,10 @@ GUI, and launch — no hand-editing INI files.
 - **Profile library** with cover art, a sortable details list, and an icon view
   (D-Fend-style layout: category tree on the left, list on top, tabbed preview
   below — **Screenshots / Notes / Data folder**).
-- **Tabbed profile editor** (General / Mounts & Run / CPU / Graphics / Sound /
-  MIDI / Advanced) with a live `dosbox.conf` preview.
+- **Tabbed profile editor** (General / Mounts & Run / CPU / Memory / Graphics /
+  Sound / Input / DOS / Advanced) covering the settings most games need —
+  Sound Blaster, GUS, MIDI/SoundFont, shaders, XMS/EMS/UMB, joystick, and more —
+  with a live `dosbox.conf` preview and an Advanced passthrough for anything else.
 - **New-profile wizard** — point at a folder, auto-scan for `.exe`/`.bat`/`.com`,
   fill in metadata.
 - **Global defaults** every profile inherits, plus per-profile overrides.
@@ -39,6 +41,17 @@ GUI, and launch — no hand-editing INI files.
   (drag & drop supported).
 - Ships as a single **AppImage** that bundles `dosbox-staging` yet follows your
   host GTK theme.
+
+## Screenshots
+
+Edit a profile's metadata and reach every DOSBox setting from one tabbed editor:
+
+![Profile editor — metadata and the settings tabs](docs/screenshots/editor.png)
+
+Configure the sound hardware — Sound Blaster, Gravis UltraSound, MIDI/SoundFont,
+PC speaker / Tandy — without hand-editing `dosbox.conf`:
+
+![Profile editor — the Sound tab](docs/screenshots/sound.png)
 
 ## Installation
 
