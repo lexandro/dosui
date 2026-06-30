@@ -55,6 +55,7 @@ pub fn open_for_edit(
     notebook.append_page(&dos.graphics_page, Some(&Label::new(Some("Graphics"))));
     notebook.append_page(&dos.sound_page, Some(&Label::new(Some("Sound"))));
     notebook.append_page(&dos.input_page, Some(&Label::new(Some("Input"))));
+    notebook.append_page(&dos.dosenv_page, Some(&Label::new(Some("DOS"))));
     let advanced_index =
         notebook.append_page(&dos.advanced_page, Some(&Label::new(Some("Advanced"))));
 

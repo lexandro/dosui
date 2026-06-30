@@ -133,6 +133,12 @@ pub struct DosboxConfig {
     /// `[joystick] swap34` — swap buttons 3 and 4
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub joy_swap34: Option<bool>,
+    /// `[dos] ver` — reported DOS version (3.3 / 5.0 / 6.22 / 7.1)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dos_ver: Option<String>,
+    /// `[dos] country` — DOS country code (auto / numeric)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub country: Option<String>,
 
     /// Advanced / unmodeled keys: section -> (key -> value), order preserved.
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
@@ -193,6 +199,8 @@ impl DosboxConfig {
             joysticktype: pick(&overrides.joysticktype, &self.joysticktype),
             joy_autofire: overrides.joy_autofire.or(self.joy_autofire),
             joy_swap34: overrides.joy_swap34.or(self.joy_swap34),
+            dos_ver: pick(&overrides.dos_ver, &self.dos_ver),
+            country: pick(&overrides.country, &self.country),
             passthrough,
         }
     }
@@ -232,6 +240,12 @@ impl DosboxConfig {
         }
         if let Some(v) = &self.keyboardlayout {
             put(&mut sections, "dos", "keyboardlayout", v.clone());
+        }
+        if let Some(v) = &self.dos_ver {
+            put(&mut sections, "dos", "ver", v.clone());
+        }
+        if let Some(v) = &self.country {
+            put(&mut sections, "dos", "country", v.clone());
         }
         if let Some(v) = &self.mouse_capture {
             put(&mut sections, "mouse", "mouse_capture", v.clone());
@@ -546,6 +560,19 @@ mod tests {
         assert!(conf.contains("joysticktype = 4axis\n"));
         assert!(conf.contains("autofire = true\n"));
         assert!(conf.contains("swap34 = false\n"));
+    }
+
+    #[test]
+    fn dos_env_keys_render_into_dos() {
+        let conf = DosboxConfig {
+            dos_ver: Some("6.22".into()),
+            country: Some("36".into()),
+            ..Default::default()
+        }
+        .render(&run(false));
+        assert!(conf.contains("[dos]\n"));
+        assert!(conf.contains("ver = 6.22\n"));
+        assert!(conf.contains("country = 36\n"));
     }
 
     #[test]

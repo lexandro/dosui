@@ -187,6 +187,8 @@ fn parse_dosbox(mut sections: IndexMap<String, IndexMap<String, String>>) -> Dos
     cfg.joysticktype = take("joystick", "joysticktype");
     cfg.joy_autofire = take("joystick", "autofire").map(|v| parse_bool(&v));
     cfg.joy_swap34 = take("joystick", "swap34").map(|v| parse_bool(&v));
+    cfg.dos_ver = take("dos", "ver");
+    cfg.country = take("dos", "country");
 
     // Remaining keys -> passthrough (drop now-empty sections).
     sections.retain(|_, keys| !keys.is_empty());
