@@ -11,7 +11,7 @@ repository = "https://github.com/lexandro/dosui"
 homepage = "https://github.com/lexandro/dosui"
 keywords = ["dosbox", "frontend", "launcher", "gtk4", "retro"]
 categories = ["games", "gui"]
-exclude = ["/docs", "/packaging", "/.github", "/data/*.png"]
+exclude = ["/docs", "/packaging", "/.github", "/assets", "/data/*.png"]
 
 [dependencies]
 gtk = { package = "gtk4", version = "0.9", features = ["v4_12"] }

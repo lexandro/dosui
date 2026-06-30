@@ -17,7 +17,7 @@ use anyhow::{Context, Result};
 const APP_ID: &str = "io.github.dosui";
 
 const DESKTOP_TEMPLATE: &str = include_str!("../../data/io.github.dosui.desktop");
-const ICON_SVG: &str = include_str!("../../data/io.github.dosui.svg");
+const ICON_PNG: &[u8] = include_bytes!("../../data/icons/hicolor/256x256/apps/io.github.dosui.png");
 
 /// The command the `.desktop` `Exec=` should launch: prefer `$APPIMAGE` (the
 /// portable file the user double-clicks) over the unpacked inner binary, which
@@ -52,9 +52,9 @@ pub fn desktop_launcher_present(desktop_dir: &Path) -> bool {
 /// Install the applications-menu entry and its icon under `data_home`
 /// (`~/.local/share`). Overwrites an existing entry to refresh `Exec=`.
 pub fn install_menu(data_home: &Path, exec: &Path) -> Result<PathBuf> {
-    let icon_dir = data_home.join("icons/hicolor/scalable/apps");
+    let icon_dir = data_home.join("icons/hicolor/256x256/apps");
     fs::create_dir_all(&icon_dir).with_context(|| format!("creating {}", icon_dir.display()))?;
-    fs::write(icon_dir.join(format!("{APP_ID}.svg")), ICON_SVG).context("writing icon")?;
+    fs::write(icon_dir.join(format!("{APP_ID}.png")), ICON_PNG).context("writing icon")?;
 
     let path = menu_entry_path(data_home);
     fs::create_dir_all(path.parent().unwrap())
@@ -93,7 +93,9 @@ fn make_executable(_path: &Path) -> Result<()> {
 pub fn remove_menu(data_home: &Path) -> Result<bool> {
     let entry = remove_if_present(&menu_entry_path(data_home))?;
     let icon =
-        remove_if_present(&data_home.join(format!("icons/hicolor/scalable/apps/{APP_ID}.svg")))?;
+        remove_if_present(&data_home.join(format!("icons/hicolor/256x256/apps/{APP_ID}.png")))?;
+    // Clean up the icon from older versions that shipped an SVG.
+    let _ = remove_if_present(&data_home.join(format!("icons/hicolor/scalable/apps/{APP_ID}.svg")));
     Ok(entry || icon)
 }
 
@@ -163,7 +165,7 @@ mod tests {
         install_menu(home, Path::new("/opt/dosui.AppImage")).unwrap();
         assert!(menu_entry_present(home));
         assert!(home
-            .join("icons/hicolor/scalable/apps/io.github.dosui.svg")
+            .join("icons/hicolor/256x256/apps/io.github.dosui.png")
             .exists());
         assert!(fs::read_to_string(menu_entry_path(home))
             .unwrap()
@@ -180,7 +182,7 @@ mod tests {
         assert!(remove_menu(home).unwrap(), "removed something");
         assert!(!menu_entry_present(home));
         assert!(!home
-            .join("icons/hicolor/scalable/apps/io.github.dosui.svg")
+            .join("icons/hicolor/256x256/apps/io.github.dosui.png")
             .exists());
         assert!(!remove_menu(home).unwrap(), "second remove is a no-op");
     }

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- New application icon (DOS prompt + floppy + Tux), installed at all hicolor
+  sizes (16–512) for the menu, desktop, and window/taskbar — replaces the
+  placeholder. Regenerate from `assets/app_icon.png` via `packaging/gen-icons.sh`.
+
 ## [0.3.0] - 2026-06-30
 
 ### Added

@@ -15,9 +15,10 @@ DESTDIR ?=
 
 BIN      := target/release/dosui
 APP_ID   := io.github.dosui
+ICON_SIZES := 16 32 48 64 128 256 512
 bindir   := $(DESTDIR)$(PREFIX)/bin
 appsdir  := $(DESTDIR)$(PREFIX)/share/applications
-icondir  := $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps
+iconbase := $(DESTDIR)$(PREFIX)/share/icons/hicolor
 metadir  := $(DESTDIR)$(PREFIX)/share/metainfo
 
 .PHONY: all build run test check fmt clippy appimage install uninstall clean
@@ -53,8 +54,8 @@ $(BIN): build
 install: $(BIN)
 	$(INSTALL) -Dm755 $(BIN) $(bindir)/dosui
 	$(INSTALL) -Dm644 data/$(APP_ID).desktop $(appsdir)/$(APP_ID).desktop
-	$(INSTALL) -Dm644 data/$(APP_ID).svg $(icondir)/$(APP_ID).svg
 	$(INSTALL) -Dm644 data/$(APP_ID).metainfo.xml $(metadir)/$(APP_ID).metainfo.xml
+	$(foreach s,$(ICON_SIZES),$(INSTALL) -Dm644 data/icons/hicolor/$(s)x$(s)/apps/$(APP_ID).png $(iconbase)/$(s)x$(s)/apps/$(APP_ID).png;)
 ifeq ($(DESTDIR),)
 	-update-desktop-database $(PREFIX)/share/applications 2>/dev/null || true
 	-gtk-update-icon-cache -qtf $(PREFIX)/share/icons/hicolor 2>/dev/null || true
@@ -64,8 +65,8 @@ endif
 uninstall:
 	rm -f $(bindir)/dosui
 	rm -f $(appsdir)/$(APP_ID).desktop
-	rm -f $(icondir)/$(APP_ID).svg
 	rm -f $(metadir)/$(APP_ID).metainfo.xml
+	$(foreach s,$(ICON_SIZES),rm -f $(iconbase)/$(s)x$(s)/apps/$(APP_ID).png;)
 	@echo "Removed dosui from $(PREFIX)."
 
 clean:

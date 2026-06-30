@@ -23,6 +23,9 @@ use crate::ui::library::{self, Profiles};
 use crate::ui::preview::{self, Preview};
 
 pub fn build(app: &Application) {
+    // Window/taskbar icon, resolved from the icon theme by app id.
+    gtk::Window::set_default_icon_name(crate::app::APP_ID);
+
     let profiles: Profiles = Rc::new(RefCell::new(library::load_profiles()));
 
     let window = ApplicationWindow::builder()

@@ -70,8 +70,10 @@ rm -rf "$APPDIR"
 install -Dm755 "$ROOT/target/release/dosui" "$APPDIR/usr/bin/dosui"
 install -Dm644 "$ROOT/data/io.github.dosui.desktop" \
     "$APPDIR/usr/share/applications/io.github.dosui.desktop"
-install -Dm644 "$ROOT/data/io.github.dosui.svg" \
-    "$APPDIR/usr/share/icons/hicolor/scalable/apps/io.github.dosui.svg"
+for size in 16 32 48 64 128 256 512; do
+    install -Dm644 "$ROOT/data/icons/hicolor/${size}x${size}/apps/io.github.dosui.png" \
+        "$APPDIR/usr/share/icons/hicolor/${size}x${size}/apps/io.github.dosui.png"
+done
 # Bundle dosbox-staging next to dosui; the launcher finds it via $APPDIR/usr/bin/dosbox.
 cp -a "$DOSBOX_DIR/dosbox" "$APPDIR/usr/bin/dosbox"
 cp -a "$DOSBOX_DIR/resources" "$APPDIR/usr/bin/resources"
@@ -100,7 +102,7 @@ export PATH="$TOOLS:$PATH"
 log "linuxdeploy: bundling GTK runtime"
 "$LD" --appdir "$APPDIR" \
     --desktop-file "$APPDIR/usr/share/applications/io.github.dosui.desktop" \
-    --icon-file "$APPDIR/usr/share/icons/hicolor/scalable/apps/io.github.dosui.svg" \
+    --icon-file "$APPDIR/usr/share/icons/hicolor/256x256/apps/io.github.dosui.png" \
     --plugin gtk
 
 # 6. Follow the host theme: neutralise any forced GTK_THEME in the plugin hook.
