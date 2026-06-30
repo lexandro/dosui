@@ -6,7 +6,7 @@
 //! order-preserving `section -> (key -> value)` map — this gives D-Fend-style
 //! depth without modeling hundreds of keys.
 //!
-//! Enumerable-but-open fields (cycles, scaler, …) are stored as `String`: the UI
+//! Enumerable-but-open fields (cycles, glshader, …) are stored as `String`: the UI
 //! offers known values via dropdowns, but new dosbox-staging values still work.
 //!
 //! The generated file is an output artifact, regenerated on every launch.
@@ -27,6 +27,12 @@ pub struct DosboxConfig {
     /// `[sdl] output` — texture / opengl / …
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output: Option<String>,
+    /// `[sdl] fullscreen` — start directly in fullscreen
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fullscreen: Option<bool>,
+    /// `[sdl] vsync` — auto / on / adaptive / off
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vsync: Option<String>,
     /// `[dosbox] machine` — svga_s3 / vgaonly / …
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub machine: Option<String>,
@@ -45,9 +51,10 @@ pub struct DosboxConfig {
     /// `[render] aspect`
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub aspect: Option<bool>,
-    /// `[render] scaler` — none / normal2x / …
+    /// `[render] glshader` — CRT/GLSL shader (crt-auto / sharp / none / …).
+    /// Replaces the obsolete `scaler` key, which dosbox-staging no longer reads.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub scaler: Option<String>,
+    pub glshader: Option<String>,
     /// `[sblaster] sbtype` — sb16 / sbpro2 / none / …
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sbtype: Option<String>,
@@ -106,13 +113,15 @@ impl DosboxConfig {
 
         DosboxConfig {
             output: pick(&overrides.output, &self.output),
+            fullscreen: overrides.fullscreen.or(self.fullscreen),
+            vsync: pick(&overrides.vsync, &self.vsync),
             machine: pick(&overrides.machine, &self.machine),
             memsize: overrides.memsize.or(self.memsize),
             core: pick(&overrides.core, &self.core),
             cputype: pick(&overrides.cputype, &self.cputype),
             cycles: pick(&overrides.cycles, &self.cycles),
             aspect: overrides.aspect.or(self.aspect),
-            scaler: pick(&overrides.scaler, &self.scaler),
+            glshader: pick(&overrides.glshader, &self.glshader),
             sbtype: pick(&overrides.sbtype, &self.sbtype),
             sbbase: pick(&overrides.sbbase, &self.sbbase),
             sbirq: pick(&overrides.sbirq, &self.sbirq),
@@ -137,6 +146,12 @@ impl DosboxConfig {
         if let Some(v) = &self.output {
             put(&mut sections, "sdl", "output", v.clone());
         }
+        if let Some(v) = self.fullscreen {
+            put(&mut sections, "sdl", "fullscreen", bool_str(v));
+        }
+        if let Some(v) = &self.vsync {
+            put(&mut sections, "sdl", "vsync", v.clone());
+        }
         if let Some(v) = &self.machine {
             put(&mut sections, "dosbox", "machine", v.clone());
         }
@@ -155,8 +170,8 @@ impl DosboxConfig {
         if let Some(v) = self.aspect {
             put(&mut sections, "render", "aspect", bool_str(v));
         }
-        if let Some(v) = &self.scaler {
-            put(&mut sections, "render", "scaler", v.clone());
+        if let Some(v) = &self.glshader {
+            put(&mut sections, "render", "glshader", v.clone());
         }
         if let Some(v) = &self.rate {
             put(&mut sections, "mixer", "rate", v.to_string());
@@ -354,6 +369,20 @@ mod tests {
         assert!(conf.contains("[render]\naspect = true\n"));
         // exit_after=false -> no trailing exit
         assert!(!conf.contains("\nexit\n"));
+    }
+
+    #[test]
+    fn display_keys_render_into_sdl_and_render() {
+        let conf = DosboxConfig {
+            fullscreen: Some(true),
+            vsync: Some("on".into()),
+            glshader: Some("sharp".into()),
+            ..Default::default()
+        }
+        .render(&run(false));
+        assert!(conf.contains("fullscreen = true\n"));
+        assert!(conf.contains("vsync = on\n"));
+        assert!(conf.contains("[render]\nglshader = sharp\n"));
     }
 
     #[test]

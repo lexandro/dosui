@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Graphics tab: **Fullscreen** and **VSync** (auto/on/adaptive/off) options, and a
+  **Shader** field (`[render] glshader`) with common presets (sharp, crt-auto, …)
+  that also accepts any shader name.
 - Sound tab: dedicated **Sound Blaster** (type, port, IRQ, DMA, high DMA) and
   **Gravis UltraSound** (enable, port, IRQ, DMA) settings, grouped into sections
   with the real default values — no more hand-editing the Advanced passthrough
@@ -24,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - "Default" now shows the DOSBox built-in value in the global Settings (e.g.
   `(default) · svga_s3`, Cycles placeholder `auto`), so it's clear what leaving a
   field unset actually does.
+
+### Removed
+- Graphics **Scaler** field: dosbox-staging no longer reads `[render] scaler`
+  (it's obsolete), so the field did nothing. Use the new **Shader** (`glshader`)
+  field instead. Existing `scaler` values are dropped on import and ignored when
+  loading old profiles.
 
 ## [0.3.1] - 2026-06-30
 

@@ -159,13 +159,16 @@ fn parse_dosbox(mut sections: IndexMap<String, IndexMap<String, String>>) -> Dos
     };
 
     cfg.output = take("sdl", "output");
+    cfg.fullscreen = take("sdl", "fullscreen").map(|v| parse_bool(&v));
+    cfg.vsync = take("sdl", "vsync");
     cfg.machine = take("dosbox", "machine");
     cfg.memsize = take("dosbox", "memsize").and_then(|v| v.parse().ok());
     cfg.core = take("cpu", "core");
     cfg.cputype = take("cpu", "cputype");
     cfg.cycles = take("cpu", "cycles");
     cfg.aspect = take("render", "aspect").map(|v| parse_bool(&v));
-    cfg.scaler = take("render", "scaler");
+    cfg.glshader = take("render", "glshader");
+    take("render", "scaler"); // obsolete in dosbox-staging — drop, don't preserve
     cfg.sbtype = take("sblaster", "sbtype");
     cfg.rate = take("mixer", "rate").and_then(|v| v.parse().ok());
     cfg.mididevice = take("midi", "mididevice");
