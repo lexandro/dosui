@@ -9,8 +9,8 @@ use std::rc::Rc;
 use gtk::gio;
 use gtk::prelude::*;
 use gtk::{
-    AlertDialog, ApplicationWindow, Box as GtkBox, Button, Entry, FileDialog, Label, Notebook,
-    Orientation, Window,
+    AlertDialog, ApplicationWindow, Box as GtkBox, Button, Entry, FileDialog, Frame, Label,
+    Notebook, Orientation, SizeGroup, SizeGroupMode, Widget, Window,
 };
 
 use crate::config::defaults;
@@ -114,46 +114,51 @@ pub fn open(parent: &ApplicationWindow, on_saved: Rc<dyn Fn()>) {
     window.present();
 }
 
-/// Application tab: the DOSBox binary path with a Browse and an Auto-detect button.
+/// Application tab: grouped settings — the DOSBox binary path, and (for the
+/// AppImage) the desktop-shortcut actions.
 fn build_app_tab(settings: &AppSettings, window: &Window) -> (GtkBox, Entry) {
     let page = widgets::page();
-    page.append(
-        &Label::builder()
-            .label("Leave the path empty to auto-detect dosbox-staging / dosbox on PATH.")
-            .halign(gtk::Align::Start)
-            .css_classes(["dim-label"])
-            .build(),
-    );
+
+    // DOSBox section.
     let current = settings
         .dosbox_path
         .as_ref()
         .map(|p| p.display().to_string())
         .unwrap_or_default();
     let (row, dosbox_path, browse) = widgets::file_row("DOSBox binary", &current);
-    page.append(&row);
+    page.append(&section(
+        "DOSBox",
+        "Leave empty to auto-detect dosbox-staging / dosbox on your PATH.",
+        &row,
+    ));
+    wire_browse(window, &dosbox_path, &browse);
 
-    // AppImage only: add/remove the menu + desktop shortcuts on demand.
+    // Desktop-shortcut section (AppImage only).
     if crate::integration::is_appimage() {
-        page.append(
-            &Label::builder()
-                .label("Shortcuts let you launch dosui without locating the AppImage file.")
-                .halign(gtk::Align::Start)
-                .margin_top(12)
-                .css_classes(["dim-label"])
-                .build(),
-        );
         let add = Button::with_label("Add to applications menu & desktop");
+        add.add_css_class("suggested-action");
         let remove = Button::with_label("Remove from menu & desktop");
+        remove.add_css_class("destructive-action");
         remove.set_sensitive(crate::integration::is_installed());
 
-        let row = GtkBox::builder()
-            .orientation(Orientation::Horizontal)
+        // Stack the buttons, same width.
+        let sizes = SizeGroup::new(SizeGroupMode::Horizontal);
+        sizes.add_widget(&add);
+        sizes.add_widget(&remove);
+        let buttons = GtkBox::builder()
+            .orientation(Orientation::Vertical)
             .spacing(8)
             .halign(gtk::Align::Start)
             .build();
-        row.append(&add);
-        row.append(&remove);
-        page.append(&row);
+        buttons.append(&add);
+        buttons.append(&remove);
+
+        page.append(&section(
+            "Desktop shortcuts",
+            "Add dosui to your applications menu and desktop so you can launch \
+             it without locating the AppImage file.",
+            &buttons,
+        ));
 
         {
             let win = window.clone();
@@ -173,27 +178,59 @@ fn build_app_tab(settings: &AppSettings, window: &Window) -> (GtkBox, Entry) {
         }
     }
 
-    {
-        let window = window.downgrade();
-        let entry = dosbox_path.clone();
-        browse.connect_clicked(move |_| {
-            let dialog = FileDialog::builder().title("Select DOSBox binary").build();
-            let entry = entry.clone();
-            dialog.open(
-                window.upgrade().as_ref(),
-                gio::Cancellable::NONE,
-                move |res| {
-                    if let Ok(file) = res {
-                        if let Some(path) = file.path() {
-                            entry.set_text(&path.display().to_string());
-                        }
-                    }
-                },
-            );
-        });
-    }
-
     (page, dosbox_path)
+}
+
+/// A settings group: a heading, a dim description, and `content` in a padded
+/// frame. Keeps the tab visually structured instead of a loose stack.
+fn section(title: &str, description: &str, content: &impl IsA<Widget>) -> GtkBox {
+    let group = GtkBox::builder()
+        .orientation(Orientation::Vertical)
+        .spacing(6)
+        .margin_top(6)
+        .build();
+    group.append(
+        &Label::builder()
+            .label(title)
+            .halign(gtk::Align::Start)
+            .css_classes(["heading"])
+            .build(),
+    );
+    group.append(
+        &Label::builder()
+            .label(description)
+            .halign(gtk::Align::Start)
+            .wrap(true)
+            .css_classes(["dim-label"])
+            .build(),
+    );
+    content.set_margin_top(10);
+    content.set_margin_bottom(10);
+    content.set_margin_start(12);
+    content.set_margin_end(12);
+    let frame = Frame::new(None);
+    frame.set_child(Some(content));
+    group.append(&frame);
+    group
+}
+
+/// Wire the DOSBox-path "Browse…" button to a file chooser.
+fn wire_browse(window: &Window, entry: &Entry, browse: &Button) {
+    let window = window.downgrade();
+    let entry = entry.clone();
+    browse.connect_clicked(move |_| {
+        let dialog = FileDialog::builder().title("Select DOSBox binary").build();
+        let entry = entry.clone();
+        dialog.open(
+            window.upgrade().as_ref(),
+            gio::Cancellable::NONE,
+            move |res| {
+                if let Ok(Some(path)) = res.map(|f| f.path()) {
+                    entry.set_text(&path.display().to_string());
+                }
+            },
+        );
+    });
 }
 
 /// Persist both the app settings and the global DOSBox defaults.

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Tidier Settings ▸ Application: grouped sections (DOSBox, Desktop shortcuts)
+  each with a heading, description, and framed content; the Add/Remove shortcut
+  buttons are stacked and equal-width.
+
 ## [0.3.1] - 2026-06-30
 
 ### Changed
