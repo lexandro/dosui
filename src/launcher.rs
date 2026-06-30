@@ -110,6 +110,7 @@ mod tests {
 
         let settings = AppSettings {
             dosbox_path: Some(fake.clone()),
+            ..Default::default()
         };
         assert_eq!(resolve_dosbox(&settings).unwrap(), fake);
     }

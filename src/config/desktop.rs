@@ -1,13 +1,12 @@
-//! First-run desktop integration.
+//! Desktop integration: install a `.desktop` launcher (+ icon) into the user's
+//! applications menu and onto their desktop, so a portable AppImage shows up in
+//! the system like an installed app.
 //!
-//! AppImages aren't registered with the desktop on their own. When dosui runs
-//! as a portable AppImage and has no menu entry yet, we install a `.desktop`
-//! launcher plus its icon into the user's XDG data dirs so it shows up in the
-//! application menu. Idempotent (only when missing) and best-effort — the
-//! caller logs any error; it never blocks startup.
-//!
-//! GTK-free and unit-testable: everything takes an explicit `data_home`, so the
-//! tests run against a temp directory.
+//! This module is GTK-free and only writes files; the *decision* to integrate
+//! (the user prompt) and the file-manager "trusted" flag live in the UI layer.
+//! Everything takes explicit directories so it is unit-testable against temp
+//! dirs. The embedded `.desktop` has its `Exec=` line replaced with the path of
+//! the running binary at install time.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -16,9 +15,6 @@ use anyhow::{Context, Result};
 
 const APP_ID: &str = "io.github.dosui";
 
-/// The canonical desktop entry and icon, embedded so we can always write them
-/// out regardless of the runtime layout. The `Exec=` line is replaced at
-/// install time with the path of the running binary.
 const DESKTOP_TEMPLATE: &str = include_str!("../../data/io.github.dosui.desktop");
 const ICON_SVG: &str = include_str!("../../data/io.github.dosui.svg");
 
@@ -32,31 +28,62 @@ pub fn exec_path() -> Option<PathBuf> {
     std::env::current_exe().ok()
 }
 
-/// Install the launcher + icon if no user menu entry exists yet. Returns
-/// `Ok(true)` when it installed, `Ok(false)` when an entry was already present.
-pub fn ensure_first_run(data_home: &Path, exec: &Path) -> Result<bool> {
-    if desktop_file(data_home).exists() {
-        return Ok(false);
-    }
-    install(data_home, exec)?;
-    Ok(true)
-}
-
-fn desktop_file(data_home: &Path) -> PathBuf {
+fn menu_entry_path(data_home: &Path) -> PathBuf {
     data_home
         .join("applications")
         .join(format!("{APP_ID}.desktop"))
 }
 
-fn install(data_home: &Path, exec: &Path) -> Result<()> {
+fn desktop_launcher_path(desktop_dir: &Path) -> PathBuf {
+    desktop_dir.join(format!("{APP_ID}.desktop"))
+}
+
+/// Is the applications-menu entry already installed?
+pub fn menu_entry_present(data_home: &Path) -> bool {
+    menu_entry_path(data_home).exists()
+}
+
+/// Is the desktop-surface launcher already installed?
+pub fn desktop_launcher_present(desktop_dir: &Path) -> bool {
+    desktop_launcher_path(desktop_dir).exists()
+}
+
+/// Install the applications-menu entry and its icon under `data_home`
+/// (`~/.local/share`). Overwrites an existing entry to refresh `Exec=`.
+pub fn install_menu(data_home: &Path, exec: &Path) -> Result<PathBuf> {
     let icon_dir = data_home.join("icons/hicolor/scalable/apps");
     fs::create_dir_all(&icon_dir).with_context(|| format!("creating {}", icon_dir.display()))?;
     fs::write(icon_dir.join(format!("{APP_ID}.svg")), ICON_SVG).context("writing icon")?;
 
-    let desktop = desktop_file(data_home);
-    fs::create_dir_all(desktop.parent().unwrap())
-        .with_context(|| format!("creating {}", desktop.display()))?;
-    fs::write(&desktop, desktop_contents(exec)).context("writing desktop entry")?;
+    let path = menu_entry_path(data_home);
+    fs::create_dir_all(path.parent().unwrap())
+        .with_context(|| format!("creating {}", path.display()))?;
+    fs::write(&path, desktop_contents(exec)).context("writing menu entry")?;
+    Ok(path)
+}
+
+/// Install a launcher onto the user's desktop, marked executable so the desktop
+/// treats it as an app. (The file-manager "trusted" flag is set by the caller,
+/// which needs GIO.) Returns the written path.
+pub fn install_desktop_launcher(desktop_dir: &Path, exec: &Path) -> Result<PathBuf> {
+    fs::create_dir_all(desktop_dir)
+        .with_context(|| format!("creating {}", desktop_dir.display()))?;
+    let path = desktop_launcher_path(desktop_dir);
+    fs::write(&path, desktop_contents(exec)).context("writing desktop launcher")?;
+    make_executable(&path)?;
+    Ok(path)
+}
+
+#[cfg(unix)]
+fn make_executable(path: &Path) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let mut perm = fs::metadata(path)?.permissions();
+    perm.set_mode(0o755);
+    fs::set_permissions(path, perm).with_context(|| format!("chmod +x {}", path.display()))
+}
+
+#[cfg(not(unix))]
+fn make_executable(_path: &Path) -> Result<()> {
     Ok(())
 }
 
@@ -104,23 +131,32 @@ mod tests {
     }
 
     #[test]
-    fn ensure_first_run_installs_then_is_idempotent() {
+    fn install_menu_writes_entry_and_icon() {
         let tmp = tempfile::tempdir().unwrap();
         let home = tmp.path();
-        let exec = Path::new("/opt/dosui.AppImage");
+        assert!(!menu_entry_present(home));
 
-        assert!(ensure_first_run(home, exec).unwrap(), "first run installs");
-        assert!(desktop_file(home).exists());
+        install_menu(home, Path::new("/opt/dosui.AppImage")).unwrap();
+        assert!(menu_entry_present(home));
         assert!(home
             .join("icons/hicolor/scalable/apps/io.github.dosui.svg")
             .exists());
-        assert!(fs::read_to_string(desktop_file(home))
+        assert!(fs::read_to_string(menu_entry_path(home))
             .unwrap()
             .contains("Exec=/opt/dosui.AppImage"));
+    }
 
-        assert!(
-            !ensure_first_run(home, exec).unwrap(),
-            "second run is a no-op"
-        );
+    #[test]
+    #[cfg(unix)]
+    fn desktop_launcher_is_executable() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        assert!(!desktop_launcher_present(dir));
+
+        let path = install_desktop_launcher(dir, Path::new("/opt/dosui.AppImage")).unwrap();
+        assert!(desktop_launcher_present(dir));
+        let mode = fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o111, 0o111, "launcher must be executable");
     }
 }

@@ -101,6 +101,9 @@ pub fn build(app: &Application) {
 
     actions::install_drop_target(&body, &reload);
     window.present();
+
+    // Offer to add menu/desktop shortcuts when running as an AppImage (once).
+    crate::ui::desktop_integration::maybe_prompt(&window);
 }
 
 /// A callback that rescans profiles, rebuilds the views + sidebar, and reselects.

@@ -132,6 +132,25 @@ fn build_app_tab(settings: &AppSettings, window: &Window) -> (GtkBox, Entry) {
     let (row, dosbox_path, browse) = widgets::file_row("DOSBox binary", &current);
     page.append(&row);
 
+    // AppImage only: a button to (re)add the menu + desktop shortcuts on demand.
+    if std::env::var_os("APPIMAGE").is_some() {
+        page.append(
+            &Label::builder()
+                .label("Shortcuts let you launch dosui without locating the AppImage file.")
+                .halign(gtk::Align::Start)
+                .margin_top(12)
+                .css_classes(["dim-label"])
+                .build(),
+        );
+        let add = Button::builder()
+            .label("Add to applications menu & desktop")
+            .halign(gtk::Align::Start)
+            .build();
+        let win = window.clone();
+        add.connect_clicked(move |_| crate::ui::desktop_integration::integrate_now(&win));
+        page.append(&add);
+    }
+
     {
         let window = window.downgrade();
         let entry = dosbox_path.clone();
@@ -158,12 +177,13 @@ fn build_app_tab(settings: &AppSettings, window: &Window) -> (GtkBox, Entry) {
 /// Persist both the app settings and the global DOSBox defaults.
 fn save_all(dosbox_path: &Entry, form: &DosboxForm) -> anyhow::Result<()> {
     let path = dosbox_path.text().trim().to_string();
-    let settings = AppSettings {
-        dosbox_path: if path.is_empty() {
-            None
-        } else {
-            Some(path.into())
-        },
+    // Load-then-update so we preserve fields the dialog doesn't edit
+    // (e.g. desktop_prompted).
+    let mut settings = AppSettings::load();
+    settings.dosbox_path = if path.is_empty() {
+        None
+    } else {
+        Some(path.into())
     };
     settings.save()?;
     defaults::save(&form.collect())

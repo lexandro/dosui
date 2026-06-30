@@ -20,6 +20,11 @@ pub struct AppSettings {
     /// Explicit DOSBox binary path. When unset, the launcher auto-detects it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dosbox_path: Option<PathBuf>,
+
+    /// Whether we've already offered desktop/menu integration (AppImage only).
+    /// Set once we prompt, so we never nag on later launches.
+    #[serde(default)]
+    pub desktop_prompted: bool,
 }
 
 impl AppSettings {

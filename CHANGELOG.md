@@ -8,10 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- First-run desktop integration: when launched as an AppImage with no menu
-  entry yet, dosui installs a `.desktop` launcher and icon into the user's XDG
-  data dirs so it shows up in the application menu. Idempotent, and skipped for
-  installed or dev runs.
+- Desktop integration (AppImage only): on first launch dosui *asks* whether to
+  add shortcuts; on confirmation it installs an applications-menu entry plus a
+  launcher on your desktop (executable and marked trusted), with the icon. The
+  answer is remembered so it never nags, and you can (re)add the shortcuts
+  anytime from Settings. Skipped for installed or dev runs.
 
 ### Changed
 - Bundle dosbox-staging 0.82.2 (was 0.82.0) in the AppImage.

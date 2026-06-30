@@ -3,6 +3,7 @@
 pub mod actions;
 pub mod bulk_edit;
 pub mod category_sidebar;
+pub mod desktop_integration;
 pub mod display;
 pub mod dosbox_form;
 pub mod editor_general;
