@@ -13,7 +13,7 @@ Prerequisites (Debian / Ubuntu / Linux Mint):
 sudo apt install build-essential libgtk-4-dev librsvg2-common
 ```
 
-A stable Rust toolchain (MSRV **1.80**) is required. Common commands:
+A stable Rust toolchain (MSRV **1.88**) is required. Common commands:
 
 ```sh
 cargo run                  # run (RUST_LOG=debug cargo run for verbose logs)

@@ -70,7 +70,7 @@ DOSBox is required. It still follows your desktop's GTK theme.
 
 ### From source
 
-You need a stable **Rust toolchain** (MSRV 1.80 — see `rust-version` in
+You need a stable **Rust toolchain** (MSRV 1.88 — see `rust-version` in
 [`Cargo.toml`](Cargo.toml); install via [rustup](https://rustup.rs/)) and the
 **GTK 4 development libraries**.
 

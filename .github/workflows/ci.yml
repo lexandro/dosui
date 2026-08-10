@@ -46,3 +46,26 @@ jobs:
 
       - name: Build (release)
         run: cargo build --release
+
+  # Guards the `rust-version` in Cargo.toml. Without this the declared MSRV
+  # drifts silently as dependencies raise theirs (it had slipped from 1.80 to a
+  # real 1.88 unnoticed).
+  msrv:
+    name: MSRV (1.88)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install GTK 4 development libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-4-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.88
+
+      - name: Cache cargo registry and build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check
+        run: cargo check --all-targets --all-features
