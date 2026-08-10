@@ -5,9 +5,9 @@ use std::rc::Rc;
 use gtk::prelude::*;
 use gtk::{gio, Application, ApplicationWindow, Box as GtkBox, DropTarget, FileDialog};
 
-use super::report;
 use crate::config::profile::{self, Profile};
 use crate::config::{archive, conf_import};
+use crate::ui::dialogs;
 
 /// Register the `import` and `import-zip` actions on `app`.
 pub(super) fn register(app: &Application, window: &ApplicationWindow, reload: &Rc<dyn Fn()>) {
@@ -35,11 +35,16 @@ pub(super) fn register(app: &Application, window: &ApplicationWindow, reload: &R
                 match std::fs::read_to_string(&path) {
                     Ok(text) => {
                         if let Err(e) = save_imported(&text, &title) {
-                            report(&parent, "Could not import dosbox.conf", &e);
+                            dialogs::error(&parent, "Could not import dosbox.conf", &e);
                         }
                         reload();
                     }
-                    Err(e) => log::error!("reading {} failed: {e:#}", path.display()),
+                    Err(e) => {
+                        let e =
+                            anyhow::Error::new(e).context(format!("reading {}", path.display()));
+                        log::error!("import failed: {e:#}");
+                        dialogs::error(&parent, "Could not read that file", &e);
+                    }
                 }
             });
         });
@@ -61,7 +66,7 @@ pub(super) fn register(app: &Application, window: &ApplicationWindow, reload: &R
                 let Ok(file) = res else { return };
                 let Some(path) = file.path() else { return };
                 if let Err(e) = archive::import_archive(&path) {
-                    report(&parent, "Could not import archive", &e);
+                    dialogs::error(&parent, "Could not import archive", &e);
                 }
                 reload();
             });
@@ -77,10 +82,15 @@ pub(crate) fn install_drop_target(widget: &GtkBox, reload: &Rc<dyn Fn()>) {
         gtk::gdk::DragAction::COPY,
     );
     let reload = reload.clone();
-    drop.connect_drop(move |_, value, _, _| {
+    drop.connect_drop(move |target, value, _, _| {
         let Ok(list) = value.get::<gtk::gdk::FileList>() else {
             return false;
         };
+        // Resolved at drop time so this works without threading a window in.
+        let parent = target
+            .widget()
+            .and_then(|w| w.root())
+            .and_downcast::<gtk::Window>();
         let mut imported = false;
         for file in list.files() {
             let Some(path) = file.path() else { continue };
@@ -91,6 +101,9 @@ pub(crate) fn install_drop_target(widget: &GtkBox, reload: &Rc<dyn Fn()>) {
             if is_zip {
                 if let Err(e) = archive::import_archive(&path) {
                     log::error!("dropped zip import failed: {e:#}");
+                    if let Some(parent) = &parent {
+                        dialogs::error(parent, "Could not import the dropped archive", &e);
+                    }
                 }
                 imported = true;
             }

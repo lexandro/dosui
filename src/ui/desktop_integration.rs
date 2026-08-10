@@ -10,6 +10,7 @@ use gtk::{gio, AlertDialog, ApplicationWindow};
 
 use crate::config::settings::AppSettings;
 use crate::integration;
+use crate::ui::dialogs;
 
 /// On startup: if running as an AppImage that isn't integrated yet and we
 /// haven't asked before, ask whether to add menu + desktop shortcuts.
@@ -39,7 +40,7 @@ pub fn maybe_prompt(window: &ApplicationWindow) {
         remember_prompted();
         if res == Ok(1) {
             if let Err(e) = integration::install() {
-                report(&owned, "Could not add shortcuts", &e);
+                dialogs::error(&owned, "Could not add shortcuts", &e);
             }
         }
     });
@@ -50,30 +51,30 @@ pub fn integrate_now(window: &impl IsA<gtk::Window>) {
     match integration::install() {
         Ok(()) => {
             remember_prompted();
-            note(
+            dialogs::note(
                 window,
                 "Shortcuts added",
                 "dosui is now in your applications menu and on your desktop.",
             );
         }
-        Err(e) => report(window, "Could not add shortcuts", &e),
+        Err(e) => dialogs::error(window, "Could not add shortcuts", &e),
     }
 }
 
 /// Settings button: remove the shortcuts now and confirm.
 pub fn uninstall_now(window: &impl IsA<gtk::Window>) {
     match integration::uninstall() {
-        Ok(true) => note(
+        Ok(true) => dialogs::note(
             window,
             "Shortcuts removed",
             "dosui was removed from your menu and desktop.",
         ),
-        Ok(false) => note(
+        Ok(false) => dialogs::note(
             window,
             "Nothing to remove",
             "No dosui shortcuts were installed.",
         ),
-        Err(e) => report(window, "Could not remove shortcuts", &e),
+        Err(e) => dialogs::error(window, "Could not remove shortcuts", &e),
     }
 }
 
@@ -86,21 +87,4 @@ fn remember_prompted() {
             log::warn!("could not record desktop_prompted: {e:#}");
         }
     }
-}
-
-fn note(window: &impl IsA<gtk::Window>, message: &str, detail: &str) {
-    AlertDialog::builder()
-        .modal(true)
-        .message(message.to_string())
-        .detail(detail.to_string())
-        .build()
-        .show(Some(window));
-}
-
-fn report(window: &impl IsA<gtk::Window>, message: &str, error: &anyhow::Error) {
-    AlertDialog::builder()
-        .message(message.to_string())
-        .detail(format!("{error:#}"))
-        .build()
-        .show(Some(window));
 }

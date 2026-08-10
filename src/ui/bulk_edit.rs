@@ -4,18 +4,24 @@
 //!
 //! Each field has a "Set" toggle — only toggled fields are written, so blank
 //! entries never accidentally clear data. Profiles are chosen via checkboxes.
+//!
+//! Over the 150-line soft cap by design: one dialog widget tree plus the apply
+//! logic it reads back — splitting them would separate the fields from the code
+//! that interprets them.
 
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use anyhow::Context;
 use gtk::prelude::*;
 use gtk::{
-    AlertDialog, ApplicationWindow, Box as GtkBox, Button, CheckButton, Entry, Label, Orientation,
+    ApplicationWindow, Box as GtkBox, Button, CheckButton, Entry, Label, Orientation,
     ScrolledWindow, Separator, Window,
 };
 
 use crate::config::profile::Profile;
+use crate::ui::dialogs;
 
 /// A "Set X" toggle paired with its value entry.
 struct Field {
@@ -119,11 +125,7 @@ pub fn open(parent: &ApplicationWindow, entries: Vec<(PathBuf, Profile)>, on_don
                 }
                 Err(e) => {
                     log::error!("bulk edit failed: {e:#}");
-                    AlertDialog::builder()
-                        .message("Could not apply bulk edit")
-                        .detail(format!("{e:#}"))
-                        .build()
-                        .show(Some(&window));
+                    dialogs::error(&window, "Could not apply bulk edit", &e);
                 }
             },
         );
@@ -133,11 +135,24 @@ pub fn open(parent: &ApplicationWindow, entries: Vec<(PathBuf, Profile)>, on_don
 }
 
 /// Write the enabled field changes to every checked profile.
+///
+/// The year is parsed up front: a typo must fail the whole apply rather than
+/// silently clearing the year (what an ignored parse error used to do) or
+/// leaving half the profiles written.
 fn apply_changes(
     entries: &[(PathBuf, Profile)],
     checks: &[CheckButton],
     fields: &[Field; 4],
 ) -> anyhow::Result<()> {
+    let year: Option<Option<u16>> = match fields[3].change() {
+        None => None,
+        Some(None) => Some(None),
+        Some(Some(text)) => Some(Some(
+            text.parse()
+                .with_context(|| format!("“{text}” is not a valid year"))?,
+        )),
+    };
+
     for (i, (dir, profile)) in entries.iter().enumerate() {
         if !checks.get(i).is_some_and(CheckButton::is_active) {
             continue;
@@ -152,8 +167,8 @@ fn apply_changes(
         if let Some(v) = fields[2].change() {
             p.publisher = v;
         }
-        if let Some(v) = fields[3].change() {
-            p.year = v.and_then(|s| s.parse().ok());
+        if let Some(v) = year {
+            p.year = v;
         }
         p.save(dir)?;
     }

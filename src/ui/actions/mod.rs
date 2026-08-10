@@ -12,7 +12,7 @@ mod misc;
 use std::rc::Rc;
 
 use gtk::prelude::*;
-use gtk::{gio, AlertDialog, Application, ApplicationWindow, SingleSelection};
+use gtk::{gio, Application, ApplicationWindow, SingleSelection};
 
 use crate::ui::library::Profiles;
 
@@ -28,7 +28,8 @@ const SELECTION_ACTIONS: [&str; 6] = [
     "favorite",
 ];
 
-/// Register every `app.*` action plus accelerators.
+/// Register every `app.*` action plus accelerators. Failures are reported with
+/// [`crate::ui::dialogs::error`], never only logged.
 pub(crate) fn install_actions(
     app: &Application,
     window: &ApplicationWindow,
@@ -73,13 +74,4 @@ fn set_accels(app: &Application) {
     app.set_accels_for_action("app.delete", &["Delete"]);
     app.set_accels_for_action("app.settings", &["<Ctrl>comma"]);
     app.set_accels_for_action("app.quit", &["<Ctrl>q"]);
-}
-
-/// Show an error in a modal alert. Shared by the action submodules.
-pub(super) fn report(window: &ApplicationWindow, message: &str, error: &anyhow::Error) {
-    AlertDialog::builder()
-        .message(message.to_string())
-        .detail(format!("{error:#}"))
-        .build()
-        .show(Some(window));
 }

@@ -1,17 +1,19 @@
 //! Modal profile editor shell: assembles the tabs (General / Mounts & Run /
 //! DOSBox) into a Notebook and handles Save. The tab widgets live in
 //! `editor_general` and `editor_mounts`; the DOSBox tabs come from `dosbox_form`.
+//!
+//! Marginally over the 150-line soft cap: one dialog widget tree — the notebook
+//! assembly, Save/Cancel wiring, and read-back belong together.
 
 use std::path::PathBuf;
 use std::rc::Rc;
 
 use gtk::gio;
 use gtk::prelude::*;
-use gtk::{
-    AlertDialog, ApplicationWindow, Box as GtkBox, Button, Label, Notebook, Orientation, Window,
-};
+use gtk::{ApplicationWindow, Box as GtkBox, Button, Label, Notebook, Orientation, Window};
 
 use crate::config::profile::Profile;
+use crate::ui::dialogs;
 use crate::ui::dosbox_form::DosboxForm;
 use crate::ui::editor_general::{self, General};
 use crate::ui::editor_mounts::{self, Run};
@@ -102,7 +104,7 @@ pub fn open_for_edit(
                 }
                 Err(e) => {
                     log::error!("saving profile failed: {e:#}");
-                    show_error(&window, "Could not save profile", &e);
+                    dialogs::error(&window, "Could not save profile", &e);
                 }
             }
         });
@@ -170,13 +172,4 @@ fn register_editor_actions(
         app.remove_action("editor-cancel");
         gtk::glib::Propagation::Proceed
     });
-}
-
-/// Show an error in a modal alert tied to the editor window.
-fn show_error(window: &Window, message: &str, error: &anyhow::Error) {
-    AlertDialog::builder()
-        .message(message.to_string())
-        .detail(format!("{error:#}"))
-        .build()
-        .show(Some(window));
 }

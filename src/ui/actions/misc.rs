@@ -33,7 +33,7 @@ pub(super) fn register(
         let window = window.downgrade();
         settings.connect_activate(move |_, _| {
             if let Some(window) = window.upgrade() {
-                crate::ui::settings_dialog::open(&window, Rc::new(|| {}));
+                crate::ui::settings_dialog::open(&window);
             }
         });
     }

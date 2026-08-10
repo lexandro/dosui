@@ -1,18 +1,21 @@
 //! Profile lifecycle commands: play, edit, new, add-console, duplicate, delete,
 //! open-folder, favorite.
+//!
+//! Over the 150-line soft cap by design: one flat registration table of small,
+//! uniform action closures. Splitting it by verb would add files without
+//! reducing what has to be read to change one action.
 
 use std::path::Path;
 use std::rc::Rc;
 
-use gtk::glib::BoxedAnyObject;
 use gtk::prelude::*;
 use gtk::{gio, AlertDialog, Application, ApplicationWindow, FileLauncher, SingleSelection};
 
-use super::report;
 use crate::config::console;
 use crate::config::profile::{self, Profile};
 use crate::launcher;
-use crate::ui::library::{selected_entry, Entry};
+use crate::ui::dialogs;
+use crate::ui::library::{self, selected_entry};
 
 /// Register the lifecycle actions on `app`.
 pub(super) fn register(
@@ -71,12 +74,12 @@ pub(super) fn register(
         add_console.connect_activate(move |_, _| match console::ensure() {
             Ok(_) => {
                 reload();
-                select_by_id(&selection, console::CONSOLE_ID);
+                library::select_by_id(&selection, console::CONSOLE_ID);
             }
             Err(e) => {
                 log::error!("adding DOS console failed: {e:#}");
                 if let Some(window) = window.upgrade() {
-                    report(&window, "Could not add DOS console", &e);
+                    dialogs::error(&window, "Could not add DOS console", &e);
                 }
             }
         });
@@ -86,6 +89,7 @@ pub(super) fn register(
     let duplicate = gio::SimpleAction::new("duplicate", None);
     {
         let selection = selection.clone();
+        let window = window.downgrade();
         let reload = reload.clone();
         duplicate.connect_activate(move |_, _| {
             let Some((dir, prof)) = selected_entry(&selection) else {
@@ -93,6 +97,9 @@ pub(super) fn register(
             };
             if let Err(e) = profile::duplicate(&dir, &prof) {
                 log::error!("duplicating profile failed: {e:#}");
+                if let Some(window) = window.upgrade() {
+                    dialogs::error(&window, "Could not duplicate the profile", &e);
+                }
             }
             reload();
         });
@@ -122,6 +129,7 @@ pub(super) fn register(
     let favorite = gio::SimpleAction::new("favorite", None);
     {
         let selection = selection.clone();
+        let window = window.downgrade();
         let reload = reload.clone();
         favorite.connect_activate(move |_, _| {
             let Some((dir, mut prof)) = selected_entry(&selection) else {
@@ -130,6 +138,9 @@ pub(super) fn register(
             prof.favorite = !prof.favorite;
             if let Err(e) = prof.save(&dir) {
                 log::error!("toggling favorite failed: {e:#}");
+                if let Some(window) = window.upgrade() {
+                    dialogs::error(&window, "Could not update the profile", &e);
+                }
             }
             reload();
         });
@@ -155,6 +166,7 @@ fn delete_action(
             return;
         };
         let reload = reload.clone();
+        let owned = window.clone();
         let dialog = AlertDialog::builder()
             .modal(true)
             .message(format!("Delete “{}”?", prof.title))
@@ -166,7 +178,9 @@ fn delete_action(
         dialog.choose(Some(&window), gio::Cancellable::NONE, move |res| {
             if res == Ok(1) {
                 if let Err(e) = std::fs::remove_dir_all(&dir) {
+                    let e = anyhow::Error::new(e).context(format!("removing {}", dir.display()));
                     log::error!("deleting profile failed: {e:#}");
+                    dialogs::error(&owned, "Could not delete the profile", &e);
                 }
                 reload();
             }
@@ -175,29 +189,12 @@ fn delete_action(
     delete
 }
 
-/// Select the entry whose profile id matches `id`, if present (and not filtered
-/// out). Used after adding the console so the new tile is highlighted.
-fn select_by_id(selection: &SingleSelection, id: &str) {
-    let Some(model) = selection.model() else {
-        return;
-    };
-    for i in 0..model.n_items() {
-        let Some(obj) = model.item(i).and_downcast::<BoxedAnyObject>() else {
-            continue;
-        };
-        if obj.borrow::<Entry>().1.id == id {
-            selection.set_selected(i);
-            return;
-        }
-    }
-}
-
 /// Launch a profile, reporting failures in a dialog.
 fn launch_profile(dir: &Path, profile: &Profile, window: Option<ApplicationWindow>) {
     if let Err(e) = launcher::launch(dir, profile) {
         log::error!("launch failed: {e:#}");
         if let Some(window) = window {
-            report(&window, &format!("Could not launch {}", profile.title), &e);
+            dialogs::error(&window, &format!("Could not launch {}", profile.title), &e);
         }
     }
 }

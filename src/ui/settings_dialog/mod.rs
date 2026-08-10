@@ -10,17 +10,19 @@ use std::rc::Rc;
 
 use gtk::gio;
 use gtk::prelude::*;
-use gtk::{
-    AlertDialog, ApplicationWindow, Box as GtkBox, Button, Entry, Label, Notebook, Orientation,
-    Window,
-};
+use gtk::{ApplicationWindow, Box as GtkBox, Button, Entry, Label, Notebook, Orientation, Window};
 
 use crate::config::defaults;
 use crate::config::settings::AppSettings;
+use crate::ui::dialogs;
 use crate::ui::dosbox_form::DosboxForm;
 
-/// Open the settings dialog. `on_saved` runs after a successful save.
-pub fn open(parent: &ApplicationWindow, on_saved: Rc<dyn Fn()>) {
+/// Open the settings dialog.
+///
+/// Takes no "saved" callback: both files it writes (`defaults.toml`,
+/// `settings.toml`) are re-read on demand — at launch and when the editor builds
+/// its preview — so nothing in the library view goes stale.
+pub fn open(parent: &ApplicationWindow) {
     let settings = AppSettings::load();
     let defaults = defaults::load();
 
@@ -103,14 +105,9 @@ pub fn open(parent: &ApplicationWindow, on_saved: Rc<dyn Fn()>) {
         save.connect_clicked(move |_| {
             if let Err(e) = save_all(&dosbox_path, &form) {
                 log::error!("saving settings failed: {e:#}");
-                AlertDialog::builder()
-                    .message("Could not save settings")
-                    .detail(format!("{e:#}"))
-                    .build()
-                    .show(Some(&window));
+                dialogs::error(&window, "Could not save settings", &e);
                 return;
             }
-            on_saved();
             window.close();
         });
     }

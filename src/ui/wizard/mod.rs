@@ -2,6 +2,9 @@
 //! folder → pick program → name it). This module is the flow/navigation; the
 //! pages and the profile they build live in [`crate::ui::wizard_pages`], and the
 //! scriptable test hooks in [`scripting`].
+//!
+//! Marginally over the 150-line soft cap: one navigation state machine, whose
+//! `idx` / `refresh_nav` closures only make sense read together.
 
 mod scripting;
 
@@ -11,8 +14,9 @@ use std::rc::Rc;
 use gtk::gio;
 use gtk::glib::WeakRef;
 use gtk::prelude::*;
-use gtk::{AlertDialog, ApplicationWindow, Box as GtkBox, Button, Entry, Orientation, Window};
+use gtk::{ApplicationWindow, Box as GtkBox, Button, Entry, Orientation, Window};
 
+use crate::ui::dialogs;
 use crate::ui::wizard_pages::{self, Wiz, PAGES};
 
 pub fn open(parent: &ApplicationWindow, on_created: Rc<dyn Fn()>) {
@@ -123,11 +127,7 @@ fn finish(window: &Window, wiz: &Wiz, on_created: &Rc<dyn Fn()>) {
         }
         Err(e) => {
             log::error!("creating profile failed: {e:#}");
-            AlertDialog::builder()
-                .message("Could not create profile")
-                .detail(format!("{e:#}"))
-                .build()
-                .show(Some(window));
+            dialogs::error(window, "Could not create profile", &e);
         }
     }
 }
