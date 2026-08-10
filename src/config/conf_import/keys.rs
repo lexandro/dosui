@@ -34,7 +34,15 @@ pub(super) fn parse_dosbox(
     take("render", "scaler"); // obsolete in dosbox-staging — drop, don't preserve
     cfg.sbtype = take("sblaster", "sbtype");
     cfg.oplmode = take("sblaster", "oplmode");
+    cfg.sbbase = take("sblaster", "sbbase");
+    cfg.sbirq = take("sblaster", "irq");
+    cfg.sbdma = take("sblaster", "dma");
+    cfg.sbhdma = take("sblaster", "hdma");
     cfg.rate = take("mixer", "rate").and_then(|v| v.parse().ok());
+    cfg.gus = take("gus", "gus").map(|v| parse_bool(&v));
+    cfg.gusbase = take("gus", "gusbase");
+    cfg.gusirq = take("gus", "gusirq");
+    cfg.gusdma = take("gus", "gusdma");
     cfg.mididevice = take("midi", "mididevice");
     cfg.mpu401 = take("midi", "mpu401");
     cfg.soundfont = take("fluidsynth", "soundfont");

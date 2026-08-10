@@ -56,6 +56,7 @@ fn parse_mount(tokens: &[String]) -> Option<Mount> {
 
     let mut path = None;
     let mut mtype = None;
+    let mut label = None;
     let mut i = 2;
     while i < tokens.len() {
         match tokens[i].as_str() {
@@ -63,7 +64,10 @@ fn parse_mount(tokens: &[String]) -> Option<Mount> {
                 mtype = tokens.get(i + 1).cloned();
                 i += 2;
             }
-            "-label" => i += 2, // skip the label value
+            "-label" => {
+                label = tokens.get(i + 1).cloned();
+                i += 2;
+            }
             t if t.starts_with('-') => i += 1,
             t => {
                 if path.is_none() {
@@ -87,7 +91,7 @@ fn parse_mount(tokens: &[String]) -> Option<Mount> {
         drive,
         kind,
         path: path?.into(),
-        label: None,
+        label,
     })
 }
 
