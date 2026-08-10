@@ -24,6 +24,22 @@ cargo fmt                  # format
 
 Run `cargo fmt` and `cargo clippy` before every commit — CI enforces both.
 
+### No GTK 4 on your machine?
+
+dosui cannot be built without the GTK 4 development libraries, so on Windows or
+macOS `cargo test` fails in `gtk4-sys` before it reaches any dosui code. Run the
+gate in a container instead:
+
+```sh
+make check-docker   # fmt + clippy + test + MSRV check, mirroring CI
+```
+
+It builds [`packaging/Dockerfile.test`](packaging/Dockerfile.test) — Ubuntu
+24.04 with `libgtk-4-dev`, a stable toolchain, and the pinned MSRV toolchain —
+and keeps `target/` in a named volume so container and host builds don't clobber
+each other. The base image must be Ubuntu 24.04 or newer: Debian bookworm ships
+GTK 4.8, below the `v4_12` feature dosui enables.
+
 ## Project layout
 
 dosui keeps a hard boundary between a **GTK-free core** and the **UI**:

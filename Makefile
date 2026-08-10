@@ -3,6 +3,7 @@
 #   make            build the release binary
 #   make run        run from source
 #   make check      fmt + clippy + test (what CI runs)
+#   make check-docker  the same gate + MSRV, in a container (needs no local GTK)
 #   make install    install into $(PREFIX) (honours $(DESTDIR))
 #   make uninstall  remove an installed copy
 #   make appimage   build the bundled AppImage (packaging/build-appimage.sh)
@@ -21,7 +22,11 @@ appsdir  := $(DESTDIR)$(PREFIX)/share/applications
 iconbase := $(DESTDIR)$(PREFIX)/share/icons/hicolor
 metadir  := $(DESTDIR)$(PREFIX)/share/metainfo
 
-.PHONY: all build run test check fmt clippy appimage install uninstall clean
+MSRV        := 1.88
+DOCKER      ?= docker
+DOCKER_IMAGE := dosui-ci
+
+.PHONY: all build run test check check-docker fmt clippy appimage install uninstall clean
 
 all: build
 
@@ -45,6 +50,24 @@ check:
 	$(CARGO) fmt --all --check
 	$(CARGO) clippy --all-targets -- -D warnings
 	$(CARGO) test
+
+# The same gate plus an MSRV check, inside a container that carries the GTK 4
+# development libraries. For machines that cannot build dosui natively; a Linux
+# box with libgtk-4-dev wants plain `make check`.
+#
+# `target/` lives in a named volume so a container build and a host build do not
+# overwrite each other's artifacts.
+check-docker:
+	$(DOCKER) build -t $(DOCKER_IMAGE) -f packaging/Dockerfile.test packaging
+	$(DOCKER) run --rm \
+		-v "$(CURDIR)":/work \
+		-v dosui-target:/target \
+		-e RUSTFLAGS=-D\ warnings \
+		$(DOCKER_IMAGE) sh -euc '\
+			cargo fmt --all --check; \
+			cargo clippy --all-targets --all-features; \
+			cargo test --all-features; \
+			cargo +$(MSRV) check --locked --all-targets --all-features'
 
 appimage:
 	./packaging/build-appimage.sh

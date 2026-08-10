@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Internal
+- `make check-docker` runs the full CI gate (fmt, clippy, tests, MSRV) inside an
+  Ubuntu 24.04 container from `packaging/Dockerfile.test`, so the project can be
+  verified on machines without the GTK 4 development libraries.
+
 ## [0.4.1] - 2026-08-10
 
 A bug-fix release: no new features.

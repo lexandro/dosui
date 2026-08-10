@@ -1,0 +1,45 @@
+# Mirror of the CI environment, for running the test gate on a machine that
+# cannot build dosui natively (no GTK 4 development libraries — e.g. Windows or
+# macOS). Not used by CI itself, and not part of the AppImage build.
+#
+#   make check-docker          # fmt + clippy + test + MSRV, exactly what CI runs
+#
+# Or by hand, from the repository root:
+#
+#   docker build -t dosui-ci -f packaging/Dockerfile.test packaging
+#   docker run --rm -v "$PWD:/work" -v dosui-target:/target dosui-ci \
+#       cargo test --all-features
+#
+# The named volume keeps `target/` out of the source tree: a Linux build and a
+# host build would otherwise fight over the same directory.
+#
+# Base image note: this must be Ubuntu 24.04 or newer (GTK 4.14). Debian
+# bookworm ships GTK 4.8, which is too old for the `v4_12` feature dosui
+# enables in Cargo.toml, and fails at build time with a confusing
+# gtk4-sys/gsk4-sys error.
+FROM ubuntu:24.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        curl \
+        git \
+        libgtk-4-dev \
+        pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH \
+    CARGO_TARGET_DIR=/target
+
+# Stable runs the gate; the pinned toolchain must match `rust-version` in
+# Cargo.toml so `make check-docker` verifies the declared MSRV too.
+# `rustup-init` wants one --component flag per component.
+RUN curl -sSf https://sh.rustup.rs \
+      | sh -s -- -y --no-modify-path --default-toolchain stable \
+          --component rustfmt --component clippy \
+    && rustup toolchain install 1.88 --component rustfmt --component clippy \
+    && chmod -R a+w "$RUSTUP_HOME" "$CARGO_HOME"
+
+WORKDIR /work
