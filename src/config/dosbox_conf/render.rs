@@ -1,4 +1,8 @@
 //! Render a [`DosboxConfig`] to `dosbox.conf` INI text.
+//!
+//! Over the 150-line soft cap by design: roughly half the file is the inline
+//! test suite that pins each section's output, and those belong next to the
+//! `ini.*` call order they verify.
 
 use indexmap::IndexMap;
 

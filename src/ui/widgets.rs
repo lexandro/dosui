@@ -3,6 +3,10 @@
 //! Each `*_row` returns the row container plus the input widget(s) so the caller
 //! can read values back on save. Keeping these here keeps the editor tabs terse
 //! and visually consistent (aligned labels, uniform spacing).
+//!
+//! Over the 150-line soft cap by design: one cohesive vocabulary of row
+//! builders sharing `labeled` and `LABEL_WIDTH`. Callers import this module as
+//! a unit, so splitting it would only add hops.
 
 use gtk::prelude::*;
 use gtk::{

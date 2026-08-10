@@ -8,6 +8,9 @@
 //! Everything takes explicit directories so it is unit-testable against temp
 //! dirs. The embedded `.desktop` has its `Exec=` line replaced with the path of
 //! the running binary at install time.
+//!
+//! Over the 150-line soft cap by design: a third of the file is the inline test
+//! suite that exercises install/remove against temp dirs.
 
 use std::fs;
 use std::path::{Path, PathBuf};

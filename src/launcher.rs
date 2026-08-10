@@ -4,6 +4,9 @@
 //! DOSBox binary, then spawn it non-blockingly via `gio::Subprocess` with
 //! `-conf`. Mounts and the run command live in `[autoexec]`, so this is
 //! identical across dosbox-staging / dosbox-x / vanilla.
+//!
+//! Marginally over the 150-line soft cap: the launch path itself is ~100 lines,
+//! the rest is the inline test suite.
 
 use std::ffi::OsStr;
 use std::fs;

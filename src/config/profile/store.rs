@@ -1,4 +1,7 @@
 //! Loading, saving, and scanning profiles on disk.
+//!
+//! Over the 150-line soft cap by design: over half is the inline test suite
+//! covering round-trips and directory scanning.
 
 use std::fs;
 use std::path::{Path, PathBuf};

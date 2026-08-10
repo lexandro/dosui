@@ -1,5 +1,8 @@
 //! One mount entry: a drive/kind/path/label row with Browse and remove buttons,
 //! created dynamically and read back into [`Mount`]s.
+//!
+//! Marginally over the 150-line soft cap: one row widget plus the read-back
+//! that interprets its fields.
 
 use std::cell::RefCell;
 use std::path::PathBuf;
