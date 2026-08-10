@@ -63,6 +63,27 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="0.4.1" date="2026-08-10">
+      <description>
+        <p>Bug-fix release.</p>
+        <ul>
+          <li>Importing a dosbox.conf keeps the Sound Blaster and Gravis UltraSound settings in the Sound tab, and preserves mount labels.</li>
+          <li>The library keeps your selection and category filter after a save, favourite, duplicate, delete, or import.</li>
+          <li>Failed actions are reported in a dialog instead of only in the log.</li>
+          <li>The built-in DOS Console profile is created on first run.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.4.0" date="2026-06-30">
+      <description>
+        <p>Deeper DOSBox configuration coverage.</p>
+        <ul>
+          <li>New Memory, Input, and DOS tabs: XMS/EMS/UMB, video memory, keyboard layout, mouse, joystick, DOS version and country.</li>
+          <li>Sound tab gains Sound Blaster and Gravis UltraSound IO settings, OPL mode, MPU-401, and a SoundFont picker.</li>
+          <li>Graphics tab gains fullscreen, VSync, and a shader field; the obsolete scaler field is gone.</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.3.1" date="2026-06-30">
       <description>
         <p>Application icon and desktop-integration fixes.</p>

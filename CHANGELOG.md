@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-10
+
+A bug-fix release: no new features.
+
+### Fixed
+- **Importing a `dosbox.conf` dropped the Sound Blaster and Gravis UltraSound
+  settings out of the Sound tab.** dosui wrote `sbbase`, `irq`, `dma`, `hdma` and
+  the four `gus*` keys but never read them back, so an imported profile showed
+  them as unset while the real values hid in the Advanced passthrough. A
+  render→import round-trip test now covers every modeled key, and fails to
+  compile if a new one is added without deciding how it round-trips.
+- Mount `-label` values survive a `dosbox.conf` import instead of being dropped.
+- `;`-style INI comments are no longer imported as configuration keys.
+- **The library no longer jumps back to the top and resets the category filter**
+  after every save, favourite toggle, duplicate, delete, or import — the selected
+  profile and the sidebar choice are kept.
+- Sidebar categories differing only in capitalisation ("Westwood" / "westwood")
+  collapse into one row, and that row now matches every profile that produced it.
+- Duplicate, favourite, delete, drag-and-drop import, and unreadable-file errors
+  are shown in a dialog instead of only reaching the log, where someone launching
+  dosui from a menu entry would never see them.
+- Bulk edit reports an unparseable year instead of silently clearing the field,
+  and validates before writing so a typo cannot leave half the profiles updated.
+- The built-in **DOS Console** profile is created on first run. It was documented
+  as built-in but only ever *re*-added from the toolbar, so a fresh install opened
+  an empty library with no way to reach a DOS prompt.
+
+### Changed
+- **MSRV is now 1.88.** That is what the dependency tree has actually required
+  for a while (`zip` 8, `time` 0.3.51); the declared 1.80 could not build. CI
+  gained an MSRV job so the declaration cannot drift again.
+
+### Internal
+- New `ui::dialogs` module replaces six near-identical `AlertDialog` builders.
+- Every file over the 150-line soft cap now states why in its module doc.
+
 ## [0.4.0] - 2026-06-30
 
 ### Added
@@ -121,7 +157,8 @@ Initial working frontend.
 - Import from `dosbox.conf` (D-Fend / DBGL) and zipped games (drag & drop).
 - Single AppImage bundling dosbox-staging while following the host GTK theme.
 
-[Unreleased]: https://github.com/lexandro/dosui/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/lexandro/dosui/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/lexandro/dosui/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/lexandro/dosui/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/lexandro/dosui/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/lexandro/dosui/compare/v0.2.0...v0.3.0
