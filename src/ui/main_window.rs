@@ -3,6 +3,10 @@
 //! bottom preview tabs, then wires selection → preview and the reload callback.
 //! The pieces live in sibling modules (headerbar / library / list_view / grid /
 //! preview / actions); this file is just the orchestration.
+//!
+//! Marginally over the 150-line soft cap: one window assembly, where the wiring
+//! order (store → filter → sort → selection) is the point and is easiest to
+//! follow in one place.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -15,6 +19,7 @@ use gtk::{
 };
 
 use crate::app::APP_NAME;
+use crate::config::console;
 use crate::ui::actions;
 use crate::ui::category_sidebar::{Category, CategorySidebar};
 use crate::ui::games_view;
@@ -26,7 +31,7 @@ pub fn build(app: &Application) {
     // Window/taskbar icon, resolved from the icon theme by app id.
     gtk::Window::set_default_icon_name(crate::app::APP_ID);
 
-    let profiles: Profiles = Rc::new(RefCell::new(library::load_profiles()));
+    let profiles: Profiles = Rc::new(RefCell::new(seeded_profiles()));
 
     let window = ApplicationWindow::builder()
         .application(app)
@@ -80,7 +85,7 @@ pub fn build(app: &Application) {
     header.new_profile.set_action_name(Some("app.new"));
     header.settings.set_action_name(Some("app.settings"));
 
-    select_first(&selection, &preview);
+    restore_selection(&selection, None, &preview);
 
     let right = Paned::builder()
         .orientation(Orientation::Vertical)
@@ -109,6 +114,26 @@ pub fn build(app: &Application) {
     crate::ui::desktop_integration::maybe_prompt(&window);
 }
 
+/// The profile library, seeding the built-in DOS Console when it is empty.
+///
+/// The console is documented as built-in, but nothing used to create it: the
+/// toolbar action only ever *re*-added it, so a fresh install opened an empty
+/// window with no way to reach a DOS prompt. Best-effort — a failure just
+/// leaves the library empty, as before.
+fn seeded_profiles() -> Vec<library::Entry> {
+    let entries = library::load_profiles();
+    if !entries.is_empty() {
+        return entries;
+    }
+    match console::ensure() {
+        Ok(_) => library::load_profiles(),
+        Err(e) => {
+            log::warn!("could not seed the DOS console profile: {e:#}");
+            entries
+        }
+    }
+}
+
 /// A callback that rescans profiles, rebuilds the views + sidebar, and reselects.
 fn make_reload(
     store: &gio::ListStore,
@@ -123,16 +148,22 @@ fn make_reload(
     let preview = preview.clone();
     let sidebar = sidebar.clone();
     Rc::new(move || {
+        // Reloading replaces every store item, which drops the selection. Note
+        // the current profile first so the user keeps their place after a save,
+        // a favourite toggle, or an import.
+        let previous = library::selected_id(&selection);
         *profiles.borrow_mut() = library::load_profiles();
         library::fill_store(&store, &profiles.borrow());
-        sidebar.rebuild(&profiles.borrow()); // refresh categories + reset to All
-        select_first(&selection, &preview);
+        sidebar.rebuild(&profiles.borrow()); // refresh categories, keep the filter
+        restore_selection(&selection, previous.as_deref(), &preview);
     })
 }
 
-/// Select the first item (populating the preview), or clear it if empty.
-fn select_first(selection: &SingleSelection, preview: &Preview) {
-    if selection.n_items() > 0 {
+/// Re-select the profile with `id`, falling back to the first entry (or an
+/// empty preview when the library is empty).
+fn restore_selection(selection: &SingleSelection, id: Option<&str>, preview: &Preview) {
+    let restored = id.is_some_and(|id| library::select_by_id(selection, id));
+    if !restored && selection.n_items() > 0 {
         selection.set_selected(0);
     }
     refresh_preview(selection, preview);

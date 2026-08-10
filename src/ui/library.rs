@@ -65,3 +65,24 @@ pub(crate) fn selected_entry(selection: &SingleSelection) -> Option<Entry> {
         .and_downcast::<BoxedAnyObject>()
         .map(|o| o.borrow::<Entry>().clone())
 }
+
+/// The selected profile's id, if any. Paired with [`select_by_id`] to hold a
+/// user's place across a reload, which rebuilds the whole store.
+pub(crate) fn selected_id(selection: &SingleSelection) -> Option<String> {
+    selected_entry(selection).map(|(_, p)| p.id)
+}
+
+/// Select the entry with this profile id. Returns `false` when it isn't in the
+/// view — it may have been deleted, renamed, or filtered out by the sidebar.
+pub(crate) fn select_by_id(selection: &SingleSelection, id: &str) -> bool {
+    for i in 0..selection.n_items() {
+        let Some(obj) = selection.item(i).and_downcast::<BoxedAnyObject>() else {
+            continue;
+        };
+        if obj.borrow::<Entry>().1.id == id {
+            selection.set_selected(i);
+            return true;
+        }
+    }
+    false
+}

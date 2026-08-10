@@ -2,6 +2,10 @@
 //! favorites, D-Fend style. Categories are derived from the current profiles and
 //! rebuilt on reload. The active choice is shared via an `Rc<RefCell<Category>>`
 //! that the grid's filter reads.
+//!
+//! Over the 150-line soft cap by design: the [`Category`] model and the widget
+//! that renders it share the case-insensitivity invariant documented on
+//! [`same`], and would be easy to break apart.
 
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -30,8 +34,8 @@ impl Category {
         match self {
             Category::All | Category::Header => true,
             Category::Favorites => profile.favorite,
-            Category::Genre(g) => profile.genre.as_deref() == Some(g),
-            Category::Developer(d) => profile.developer.as_deref() == Some(d),
+            Category::Genre(g) => profile.genre.as_deref().is_some_and(|v| same(v, g)),
+            Category::Developer(d) => profile.developer.as_deref().is_some_and(|v| same(v, d)),
             Category::Year(y) => profile.year == Some(*y),
         }
     }
@@ -91,8 +95,14 @@ impl CategorySidebar {
         }
     }
 
-    /// Rebuild the category rows from the current profiles and reset to "All".
+    /// Rebuild the category rows from the current profiles, keeping the active
+    /// category selected when it survived the rebuild (falling back to "All").
+    ///
+    /// Every reload rebuilds the sidebar — saving an edit, toggling a favourite,
+    /// importing — so resetting to "All" here would silently drop the user's
+    /// filter on each of those.
     pub fn rebuild(&self, profiles: &[(PathBuf, Profile)]) {
+        let previous = self.active.borrow().clone();
         while let Some(row) = self.list.row_at_index(0) {
             self.list.remove(&row);
         }
@@ -125,10 +135,15 @@ impl CategorySidebar {
             }
         }
 
+        // Index 0 is always `All`, so an unknown previous category lands there.
+        let index = cats.iter().position(|c| *c == previous).unwrap_or(0);
+        let resolved = cats.get(index).cloned().unwrap_or(Category::All);
         *self.cats.borrow_mut() = cats;
-        *self.active.borrow_mut() = Category::All;
-        if let Some(first) = self.list.row_at_index(0) {
-            self.list.select_row(Some(&first));
+        *self.active.borrow_mut() = resolved;
+        // Selecting re-fires `row-selected`, which re-applies the filter. Both
+        // RefCells are unborrowed here so that handler can take them.
+        if let Some(row) = self.list.row_at_index(index as i32) {
+            self.list.select_row(Some(&row));
         }
     }
 
@@ -167,13 +182,24 @@ impl CategorySidebar {
     }
 }
 
-/// Distinct, case-insensitively sorted values produced by `field`.
+/// Case-insensitive equality — the single rule for both grouping rows and
+/// matching profiles to them.
+///
+/// Invariant: [`distinct`] and [`Category::matches`] must agree. Grouping
+/// "Westwood"/"westwood" into one row while matching them exactly would make
+/// that row hide half the profiles that produced it.
+fn same(a: &str, b: &str) -> bool {
+    a.to_lowercase() == b.to_lowercase()
+}
+
+/// Distinct, case-insensitively sorted values produced by `field`. The first
+/// spelling encountered wins; [`same`] decides what counts as a duplicate.
 fn distinct(
     profiles: &[(PathBuf, Profile)],
     field: impl Fn(&Profile) -> Option<String>,
 ) -> Vec<String> {
     let mut values: Vec<String> = profiles.iter().filter_map(|(_, p)| field(p)).collect();
     values.sort_by_key(|s| s.to_lowercase());
-    values.dedup();
+    values.dedup_by(|a, b| same(a, b));
     values
 }
