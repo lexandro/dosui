@@ -1,9 +1,16 @@
 name: Dependabot auto-merge
 
-# Queues patch-level Dependabot PRs for auto-merge. GitHub holds the merge until
-# the required "fmt · clippy · test · build" check on main passes, so a red CI
-# still blocks it. Minor/major bumps stay manual on purpose — only patch releases
-# are safe to land unreviewed.
+# Queues patch-level Dependabot PRs for auto-merge. Minor/major bumps stay
+# manual on purpose — only patch releases are safe to land unreviewed.
+#
+# What makes an unreviewed merge safe is branch protection on main, not this
+# file: both "fmt · clippy · test · build" and "MSRV (1.88)" are required, and
+# `strict` is on, so the branch must be up to date before it can merge. That
+# last part is what makes the passing run meaningful — a squash of an
+# up-to-date branch has the same tree CI just tested. Without strict, a PR
+# green against a stale base could land a tree nothing ever built, and the
+# merge itself raises no `push` event (GITHUB_TOKEN merges never do), so no
+# run on main would catch it either. Do not turn strict off.
 on: pull_request
 
 # Dependabot-triggered runs get a read-only GITHUB_TOKEN by default; these two

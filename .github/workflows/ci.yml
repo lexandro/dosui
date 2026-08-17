@@ -5,11 +5,23 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  # A merge performed by GITHUB_TOKEN (our Dependabot auto-merge) does not
+  # raise a `push` event, so an auto-merged commit would otherwise never be
+  # built on main. Branch protection is strict, so the merged tree is always
+  # one CI already passed — this weekly run is the independent check on top,
+  # and it catches breakage that arrives without a commit: `@stable` moving to
+  # a Rust release with new clippy lints (fatal here, RUSTFLAGS is -D warnings)
+  # or a changed runner image.
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
 
-# Cancel superseded runs on the same ref.
+# Cancel superseded runs on the same ref. Only for pull requests: on main every
+# commit must keep its own verdict, and cancelling would leave the very gap
+# this workflow's schedule exists to close.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
