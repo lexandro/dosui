@@ -16,3 +16,10 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+    ignore:
+      # dtolnay/rust-toolchain tags are Rust *toolchain* selectors, not action
+      # releases: `@1.88` means "install Rust 1.88". Dependabot reads them as
+      # versions and bumps them, which would silently defeat the MSRV job (and
+      # in PR #8 pinned a Rust release that does not exist yet). Pin these by
+      # hand; the `check` job's `@stable` never needs bumping anyway.
+      - dependency-name: "dtolnay/rust-toolchain"
