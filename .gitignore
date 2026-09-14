@@ -27,5 +27,8 @@ Thumbs.db
 .env
 .env.local
 
+# Local AI-assistant scratch prompts (machine-specific, not part of the repo)
+.claude/
+
 # Note: Cargo.lock is committed on purpose — dosui ships as a binary, so we pin
 # the exact dependency versions for reproducible builds.

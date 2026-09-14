@@ -67,3 +67,33 @@ load, understand, and safely change it with **minimum tokens**. Concretely:
 - Commit at **every milestone end**, and after **larger steps within a milestone**.
 - Structured, scoped messages: `feat(M1): …`, `chore(M0): …`, `docs: …`, `fix: …`.
 - Run `cargo fmt` + `cargo clippy` before committing.
+
+# A kód nyelve — KŐBE VÉSETT SZABÁLY: ENGLISH-ONLY SOURCE
+
+**A forráskód nyelve ANGOL. Kivétel nincs.** Akkor is, ha a szoftver magyar nyelvű,
+akkor is, ha a domain magyar (számlázás, MÁV, jogi szövegek), és akkor is, ha a
+velem folytatott beszélgetés magyarul megy. **A szakma nyelve az angol.**
+
+**All source code is written in English — identifiers, comments, everything.**
+
+Angolul KÖTELEZŐ:
+
+* változó-, függvény-, osztály-, metódus-, típus-, konstans- és fájlnevek
+* adatbázis tábla- és mezőnevek, migrációk, indexek, JSON/API kulcsok, enum értékek
+* kód kommentek, docstringek, TODO/FIXME jelölések
+* commit üzenetek, branch nevek, MR/PR cím és leírás
+* log üzenetek, belső hibaüzenetek, exception szövegek, teszt nevek és leírások
+* README és a repo technikai dokumentációja
+
+Magyar KIZÁRÓLAG itt lehet:
+
+* a felhasználónak megjelenő UI szövegek — és azok is i18n/lokalizációs fájlban vagy
+  fordítási kulcs mögött, **nem kódba égetve**
+* store leírások, jogi szövegek (privacy policy, ToS), marketing tartalom
+* a velem folytatott beszélgetés, chat-válaszok, terv- és összefoglaló szövegek —
+  ez NEM jelenti azt, hogy a kód is magyar lehet
+
+A meglévő magyar kódot **NEM kell visszamenőleg átírni** — nincs migrációs kampány,
+átnevezési akció, „menet közben lefordítom" sem. Az `_archive` pedig teljesen figyelmen
+kívül hagyandó. A szabály **előremutató**: minden ÚJ kód, komment, mezőnév angol.
+Meglévő magyar nevet vagy kommentet csak akkor írj át, ha külön kérem.
