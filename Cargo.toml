@@ -22,7 +22,7 @@ indexmap = { version = "2", features = ["serde"] }
 
 directories = "6"
 which = "8"
-zip = "8"
+zip = "9"
 
 anyhow = "1"
 thiserror = "2"
